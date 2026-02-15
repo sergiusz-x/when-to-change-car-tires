@@ -1,0 +1,1651 @@
+/* ═══════════════════════════════════════════════
+   Season Background – decorative fixed layer
+   ═══════════════════════════════════════════════ */
+
+.scene {
+    --px: 4px;
+    --road-h: clamp(38px, 5.6vw, 58px);
+    --road-bottom: clamp(28px, 5vh, 64px);
+    --drive-duration: 30s;
+
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: fixed;
+    z-index: 0;
+}
+
+/* ── layout: two halves ── */
+.winter,
+.summer {
+    height: 100%;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    width: 50%;
+}
+
+.winter {
+    left: 0;
+}
+
+.summer {
+    right: 0;
+}
+
+/* ═══════════════════════════
+   WINTER
+   ═══════════════════════════ */
+.winterSky {
+    background: linear-gradient(
+        180deg,
+        rgb(12 16 36 / 68%) 0%,
+        rgb(22 32 58 / 55%) 50%,
+        rgb(38 52 82 / 40%) 100%
+    );
+    inset: 0;
+    position: absolute;
+}
+
+.winterGround {
+    background: linear-gradient(
+        180deg,
+        rgb(200 218 238 / 42%) 0%,
+        rgb(225 236 248 / 48%) 100%
+    );
+    bottom: 0;
+    height: calc(var(--road-bottom) + var(--road-h) + 28px);
+    left: 0;
+    position: absolute;
+    width: 100%;
+}
+
+.moon {
+    background: radial-gradient(
+        circle,
+        rgb(240 238 220 / 92%) 0%,
+        rgb(220 218 195 / 78%) 55%,
+        rgb(200 198 175 / 0%) 100%
+    );
+    border-radius: 50%;
+    height: 36px;
+    left: 14%;
+    opacity: 0.82;
+    position: absolute;
+    top: 12%;
+    width: 36px;
+}
+
+.moon::after {
+    background: radial-gradient(
+        circle,
+        rgb(240 238 220 / 18%) 0%,
+        transparent 70%
+    );
+    border-radius: 50%;
+    content: "";
+    height: 72px;
+    left: -18px;
+    position: absolute;
+    top: -18px;
+    width: 72px;
+}
+
+.stars {
+    background:
+        radial-gradient(circle, rgb(255 255 255 / 70%) 0 1px, transparent 1px),
+        radial-gradient(circle, rgb(255 255 255 / 55%) 0 1px, transparent 1px),
+        radial-gradient(circle, rgb(200 220 255 / 50%) 0 1px, transparent 1px);
+    background-position:
+        10% 8%,
+        60% 22%,
+        38% 42%;
+    background-repeat: repeat;
+    background-size:
+        80px 90px,
+        120px 110px,
+        100px 130px;
+    inset: 0;
+    opacity: 0.6;
+    position: absolute;
+}
+
+/* ── pixel-art snowflakes ──
+   Each .snowLayer is a small pixel element with box-shadow
+   stamping many flakes across the whole winter panel using
+   vw/vh units for full coverage. Each layer falls + sways
+   at its own pace. */
+
+.snowLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    will-change: transform;
+}
+
+/* Layer A – big slow flakes, wide sway */
+.snowA {
+    animation:
+        snowFallA 18s ease-in-out infinite,
+        snowSwayA 7s ease-in-out infinite;
+    background: rgb(255 255 255 / 90%);
+    height: var(--px);
+    opacity: 0.65;
+    width: var(--px);
+    box-shadow:
+        2vw 5vh 0 0 rgb(255 255 255 / 85%),
+        8vw 12vh 0 0 rgb(245 250 255 / 80%),
+        15vw 3vh 0 0 rgb(255 255 255 / 75%),
+        5vw 22vh 0 0 rgb(240 248 255 / 82%),
+        22vw 16vh 0 0 rgb(255 255 255 / 78%),
+        12vw 32vh 0 0 rgb(248 252 255 / 80%),
+        3vw 40vh 0 0 rgb(255 255 255 / 72%),
+        18vw 30vh 0 0 rgb(242 248 255 / 76%),
+        10vw 50vh 0 0 rgb(255 255 255 / 70%),
+        7vw 58vh 0 0 rgb(245 250 255 / 74%),
+        20vw 52vh 0 0 rgb(255 255 255 / 68%),
+        4vw 70vh 0 0 rgb(248 252 255 / 72%),
+        16vw 66vh 0 0 rgb(255 255 255 / 66%),
+        9vw 80vh 0 0 rgb(242 248 255 / 70%),
+        24vw 76vh 0 0 rgb(255 255 255 / 64%),
+        1vw 88vh 0 0 rgb(248 252 255 / 60%),
+        14vw 92vh 0 0 rgb(255 255 255 / 58%),
+        28vw 8vh 0 0 rgb(255 255 255 / 72%),
+        35vw 25vh 0 0 rgb(245 250 255 / 68%),
+        40vw 45vh 0 0 rgb(255 255 255 / 64%),
+        38vw 65vh 0 0 rgb(248 252 255 / 62%),
+        42vw 85vh 0 0 rgb(255 255 255 / 58%),
+        45vw 15vh 0 0 rgb(242 248 255 / 66%),
+        48vw 55vh 0 0 rgb(255 255 255 / 60%);
+}
+
+/* Layer B – medium flakes, opposite sway */
+.snowB {
+    animation:
+        snowFallB 14s ease-in-out infinite,
+        snowSwayB 5s ease-in-out infinite;
+    background: rgb(240 248 255 / 88%);
+    height: calc(var(--px) * 0.75);
+    opacity: 0.52;
+    width: calc(var(--px) * 0.75);
+    box-shadow:
+        6vw 3vh 0 0 rgb(240 248 255 / 82%),
+        14vw 9vh 0 0 rgb(255 255 255 / 78%),
+        2vw 18vh 0 0 rgb(235 245 255 / 80%),
+        20vw 14vh 0 0 rgb(245 250 255 / 76%),
+        10vw 28vh 0 0 rgb(240 248 255 / 74%),
+        25vw 22vh 0 0 rgb(255 255 255 / 72%),
+        4vw 38vh 0 0 rgb(242 250 255 / 70%),
+        13vw 44vh 0 0 rgb(240 248 255 / 68%),
+        18vw 54vh 0 0 rgb(255 255 255 / 66%),
+        7vw 62vh 0 0 rgb(245 252 255 / 64%),
+        22vw 60vh 0 0 rgb(240 248 255 / 62%),
+        3vw 74vh 0 0 rgb(255 255 255 / 60%),
+        16vw 80vh 0 0 rgb(242 250 255 / 58%),
+        11vw 90vh 0 0 rgb(240 248 255 / 56%),
+        30vw 6vh 0 0 rgb(255 255 255 / 70%),
+        36vw 30vh 0 0 rgb(240 248 255 / 66%),
+        42vw 50vh 0 0 rgb(255 255 255 / 62%),
+        45vw 72vh 0 0 rgb(242 250 255 / 58%),
+        38vw 88vh 0 0 rgb(240 248 255 / 54%),
+        48vw 20vh 0 0 rgb(255 255 255 / 64%);
+}
+
+/* Layer C – small flakes, slow drift */
+.snowC {
+    animation:
+        snowFallC 22s ease-in-out infinite,
+        snowSwayC 9s ease-in-out infinite;
+    background: rgb(230 242 255 / 80%);
+    height: calc(var(--px) * 0.5);
+    opacity: 0.42;
+    width: calc(var(--px) * 0.5);
+    box-shadow:
+        3vw 7vh 0 0 rgb(230 242 255 / 75%),
+        12vw 2vh 0 0 rgb(245 250 255 / 70%),
+        8vw 16vh 0 0 rgb(235 245 255 / 72%),
+        19vw 12vh 0 0 rgb(230 242 255 / 68%),
+        5vw 26vh 0 0 rgb(240 248 255 / 66%),
+        24vw 20vh 0 0 rgb(230 242 255 / 64%),
+        1vw 34vh 0 0 rgb(235 245 255 / 62%),
+        15vw 40vh 0 0 rgb(230 242 255 / 60%),
+        7vw 48vh 0 0 rgb(245 250 255 / 58%),
+        21vw 46vh 0 0 rgb(230 242 255 / 56%),
+        11vw 58vh 0 0 rgb(235 245 255 / 54%),
+        17vw 68vh 0 0 rgb(230 242 255 / 52%),
+        4vw 78vh 0 0 rgb(240 248 255 / 50%),
+        26vw 35vh 0 0 rgb(230 242 255 / 64%),
+        32vw 55vh 0 0 rgb(235 245 255 / 58%),
+        40vw 10vh 0 0 rgb(230 242 255 / 62%),
+        44vw 42vh 0 0 rgb(245 250 255 / 56%),
+        46vw 75vh 0 0 rgb(230 242 255 / 50%),
+        48vw 90vh 0 0 rgb(235 245 255 / 48%);
+}
+
+/* Layer D – tiny sparse background flakes */
+.snowD {
+    animation:
+        snowFallD 26s ease-in-out infinite,
+        snowSwayD 11s ease-in-out infinite;
+    background: rgb(220 235 250 / 70%);
+    height: calc(var(--px) * 0.5);
+    opacity: 0.32;
+    width: calc(var(--px) * 0.5);
+    box-shadow:
+        7vw 6vh 0 0 rgb(220 235 250 / 65%),
+        17vw 15vh 0 0 rgb(230 242 255 / 60%),
+        2vw 24vh 0 0 rgb(220 235 250 / 58%),
+        21vw 32vh 0 0 rgb(228 240 252 / 55%),
+        10vw 42vh 0 0 rgb(220 235 250 / 52%),
+        14vw 55vh 0 0 rgb(225 238 250 / 50%),
+        5vw 68vh 0 0 rgb(220 235 250 / 48%),
+        20vw 74vh 0 0 rgb(228 240 252 / 46%),
+        28vw 18vh 0 0 rgb(220 235 250 / 56%),
+        35vw 38vh 0 0 rgb(225 238 250 / 52%),
+        42vw 58vh 0 0 rgb(220 235 250 / 48%),
+        46vw 80vh 0 0 rgb(228 240 252 / 44%),
+        48vw 45vh 0 0 rgb(220 235 250 / 50%);
+}
+
+/* Snow fall keyframes – use vh, not %, because the element
+   itself is only 4px tall (% would be relative to that). */
+@keyframes snowFallA {
+    0% {
+        transform: translateY(-40vh);
+    }
+    100% {
+        transform: translateY(110vh);
+    }
+}
+
+@keyframes snowFallB {
+    0% {
+        transform: translateY(-30vh);
+    }
+    100% {
+        transform: translateY(120vh);
+    }
+}
+
+@keyframes snowFallC {
+    0% {
+        transform: translateY(-50vh);
+    }
+    100% {
+        transform: translateY(105vh);
+    }
+}
+
+@keyframes snowFallD {
+    0% {
+        transform: translateY(-35vh);
+    }
+    100% {
+        transform: translateY(115vh);
+    }
+}
+
+/* Snow sway keyframes – horizontal wobble, each layer different */
+@keyframes snowSwayA {
+    0%,
+    100% {
+        margin-left: 0;
+    }
+    25% {
+        margin-left: 12px;
+    }
+    75% {
+        margin-left: -8px;
+    }
+}
+
+@keyframes snowSwayB {
+    0%,
+    100% {
+        margin-left: 0;
+    }
+    30% {
+        margin-left: -10px;
+    }
+    70% {
+        margin-left: 14px;
+    }
+}
+
+@keyframes snowSwayC {
+    0%,
+    100% {
+        margin-left: 0;
+    }
+    40% {
+        margin-left: 8px;
+    }
+    60% {
+        margin-left: -12px;
+    }
+}
+
+@keyframes snowSwayD {
+    0%,
+    100% {
+        margin-left: 0;
+    }
+    35% {
+        margin-left: -6px;
+    }
+    65% {
+        margin-left: 10px;
+    }
+}
+
+/* ═══════════════════════════
+   SUMMER
+   ═══════════════════════════ */
+.summerSky {
+    background: linear-gradient(
+        180deg,
+        #3d8fd6 0%,
+        #5bacee 35%,
+        #82c4f8 70%,
+        #a8d8ff 100%
+    );
+    inset: 0;
+    position: absolute;
+}
+
+.summerGround {
+    background: linear-gradient(180deg, #4a9e36 0%, #5ab844 100%);
+    bottom: 0;
+    height: calc(var(--road-bottom) + var(--road-h) + 28px);
+    left: 0;
+    position: absolute;
+    width: 100%;
+}
+
+.sun {
+    background: radial-gradient(
+        circle,
+        rgb(255 235 140 / 95%) 0%,
+        rgb(255 215 90 / 80%) 40%,
+        rgb(255 200 70 / 0%) 100%
+    );
+    border-radius: 50%;
+    height: 44px;
+    opacity: 0.88;
+    position: absolute;
+    right: 18%;
+    top: 10%;
+    width: 44px;
+}
+
+.sunGlow {
+    background: radial-gradient(
+        circle,
+        rgb(255 240 155 / 30%) 0%,
+        rgb(255 225 110 / 14%) 40%,
+        transparent 70%
+    );
+    border-radius: 50%;
+    height: 120px;
+    opacity: 0.7;
+    position: absolute;
+    right: calc(18% - 38px);
+    top: calc(10% - 38px);
+    width: 120px;
+}
+
+/* ── pixel-art clouds ──
+   Each cloud is a .pixelCloud element using ::before as the
+   pixel body. box-shadow stamps blocky squares to form the shape.
+   Clouds drift from left to right across the summer panel. */
+
+.pixelCloud {
+    position: absolute;
+    will-change: transform;
+}
+
+.pixelCloud::before {
+    background: rgb(255 255 255 / 82%);
+    content: "";
+    display: block;
+    height: var(--px);
+    position: relative;
+    width: var(--px);
+}
+
+/* Cloud 1 – large, slow */
+.pc1 {
+    animation: cloudDrift1 34s linear infinite;
+    left: -15%;
+    opacity: 0.68;
+    top: 16%;
+}
+
+.pc1::before {
+    box-shadow:
+    /* row 0 (top) – narrow humps */
+        calc(var(--px) * 2) 0 rgb(255 255 255 / 80%),
+        calc(var(--px) * 3) 0 rgb(255 255 255 / 80%),
+        calc(var(--px) * 4) 0 rgb(250 252 255 / 78%),
+        calc(var(--px) * 8) 0 rgb(255 255 255 / 76%),
+        calc(var(--px) * 9) 0 rgb(252 254 255 / 76%),
+        /* row 1 – wider */ calc(var(--px) * 1) var(--px) rgb(248 250 255 / 82%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 84%),
+        calc(var(--px) * 3) var(--px) rgb(255 255 255 / 84%),
+        calc(var(--px) * 4) var(--px) rgb(252 254 255 / 84%),
+        calc(var(--px) * 5) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 6) var(--px) rgb(248 252 255 / 82%),
+        calc(var(--px) * 7) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 8) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 9) var(--px) rgb(252 254 255 / 80%),
+        calc(var(--px) * 10) var(--px) rgb(255 255 255 / 78%),
+        /* row 2 – full body */ 0 calc(var(--px) * 2) rgb(245 248 255 / 80%),
+        calc(var(--px) * 1) calc(var(--px) * 2) rgb(248 250 255 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(255 255 255 / 84%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(255 255 255 / 84%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(252 254 255 / 82%),
+        calc(var(--px) * 5) calc(var(--px) * 2) rgb(255 255 255 / 82%),
+        calc(var(--px) * 6) calc(var(--px) * 2) rgb(248 252 255 / 80%),
+        calc(var(--px) * 7) calc(var(--px) * 2) rgb(255 255 255 / 80%),
+        calc(var(--px) * 8) calc(var(--px) * 2) rgb(252 254 255 / 78%),
+        calc(var(--px) * 9) calc(var(--px) * 2) rgb(255 255 255 / 78%),
+        calc(var(--px) * 10) calc(var(--px) * 2) rgb(248 252 255 / 76%),
+        calc(var(--px) * 11) calc(var(--px) * 2) rgb(245 250 255 / 74%),
+        /* row 3 – bottom, narrower */ calc(var(--px) * 1) calc(var(--px) * 3)
+            rgb(240 245 252 / 72%),
+        calc(var(--px) * 2) calc(var(--px) * 3) rgb(245 248 255 / 74%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(248 250 255 / 76%),
+        calc(var(--px) * 4) calc(var(--px) * 3) rgb(248 250 255 / 74%),
+        calc(var(--px) * 5) calc(var(--px) * 3) rgb(245 248 255 / 72%),
+        calc(var(--px) * 6) calc(var(--px) * 3) rgb(242 246 252 / 70%),
+        calc(var(--px) * 7) calc(var(--px) * 3) rgb(245 248 255 / 70%),
+        calc(var(--px) * 8) calc(var(--px) * 3) rgb(242 246 252 / 68%),
+        calc(var(--px) * 9) calc(var(--px) * 3) rgb(240 245 250 / 66%),
+        calc(var(--px) * 10) calc(var(--px) * 3) rgb(238 242 248 / 64%);
+}
+
+/* Cloud 2 – medium, faster */
+.pc2 {
+    animation: cloudDrift2 26s linear infinite;
+    animation-delay: -10s;
+    left: -12%;
+    opacity: 0.56;
+    top: 32%;
+}
+
+.pc2::before {
+    box-shadow:
+    /* row 0 */
+        calc(var(--px) * 1) 0 rgb(255 255 255 / 78%),
+        calc(var(--px) * 2) 0 rgb(252 254 255 / 78%),
+        calc(var(--px) * 3) 0 rgb(255 255 255 / 76%),
+        calc(var(--px) * 5) 0 rgb(255 255 255 / 74%),
+        calc(var(--px) * 6) 0 rgb(250 252 255 / 74%),
+        /* row 1 */ 0 var(--px) rgb(248 250 255 / 80%),
+        calc(var(--px) * 1) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 3) var(--px) rgb(252 254 255 / 80%),
+        calc(var(--px) * 4) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 5) var(--px) rgb(248 252 255 / 78%),
+        calc(var(--px) * 6) var(--px) rgb(255 255 255 / 78%),
+        calc(var(--px) * 7) var(--px) rgb(252 254 255 / 76%),
+        /* row 2 */ calc(var(--px) * 1) calc(var(--px) * 2)
+            rgb(242 246 252 / 72%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(245 248 255 / 74%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(248 250 255 / 74%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(245 248 255 / 72%),
+        calc(var(--px) * 5) calc(var(--px) * 2) rgb(242 246 252 / 70%),
+        calc(var(--px) * 6) calc(var(--px) * 2) rgb(240 245 250 / 68%);
+}
+
+/* Cloud 3 – small, slowest */
+.pc3 {
+    animation: cloudDrift3 40s linear infinite;
+    animation-delay: -20s;
+    left: -18%;
+    opacity: 0.46;
+    top: 48%;
+}
+
+.pc3::before {
+    box-shadow:
+    /* row 0 */
+        calc(var(--px) * 1) 0 rgb(255 255 255 / 76%),
+        calc(var(--px) * 2) 0 rgb(252 254 255 / 76%),
+        calc(var(--px) * 3) 0 rgb(255 255 255 / 74%),
+        calc(var(--px) * 4) 0 rgb(250 252 255 / 72%),
+        /* row 1 */ 0 var(--px) rgb(248 250 255 / 78%),
+        calc(var(--px) * 1) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 3) var(--px) rgb(252 254 255 / 78%),
+        calc(var(--px) * 4) var(--px) rgb(255 255 255 / 76%),
+        calc(var(--px) * 5) var(--px) rgb(248 252 255 / 74%),
+        /* row 2 */ calc(var(--px) * 1) calc(var(--px) * 2)
+            rgb(240 245 250 / 68%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(242 246 252 / 70%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(240 245 250 / 68%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(238 242 248 / 66%);
+}
+
+/* Cloud 4 – high, medium speed */
+.pc4 {
+    animation: cloudDrift4 30s linear infinite;
+    animation-delay: -5s;
+    left: -14%;
+    opacity: 0.52;
+    top: 10%;
+}
+
+.pc4::before {
+    box-shadow:
+    /* row 0 */
+        calc(var(--px) * 2) 0 rgb(255 255 255 / 78%),
+        calc(var(--px) * 3) 0 rgb(252 254 255 / 76%),
+        calc(var(--px) * 6) 0 rgb(255 255 255 / 74%),
+        calc(var(--px) * 7) 0 rgb(250 252 255 / 74%),
+        /* row 1 */ calc(var(--px) * 1) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 82%),
+        calc(var(--px) * 3) var(--px) rgb(252 254 255 / 80%),
+        calc(var(--px) * 4) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 5) var(--px) rgb(248 252 255 / 78%),
+        calc(var(--px) * 6) var(--px) rgb(255 255 255 / 78%),
+        calc(var(--px) * 7) var(--px) rgb(252 254 255 / 76%),
+        calc(var(--px) * 8) var(--px) rgb(248 250 255 / 74%),
+        /* row 2 */ 0 calc(var(--px) * 2) rgb(245 248 255 / 78%),
+        calc(var(--px) * 1) calc(var(--px) * 2) rgb(248 250 255 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(255 255 255 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(255 255 255 / 80%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(252 254 255 / 78%),
+        calc(var(--px) * 5) calc(var(--px) * 2) rgb(255 255 255 / 78%),
+        calc(var(--px) * 6) calc(var(--px) * 2) rgb(248 252 255 / 76%),
+        calc(var(--px) * 7) calc(var(--px) * 2) rgb(255 255 255 / 76%),
+        calc(var(--px) * 8) calc(var(--px) * 2) rgb(252 254 255 / 74%),
+        calc(var(--px) * 9) calc(var(--px) * 2) rgb(248 250 255 / 72%),
+        /* row 3 – bottom */ calc(var(--px) * 1) calc(var(--px) * 3)
+            rgb(242 246 252 / 70%),
+        calc(var(--px) * 2) calc(var(--px) * 3) rgb(245 248 255 / 72%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(248 250 255 / 72%),
+        calc(var(--px) * 4) calc(var(--px) * 3) rgb(245 248 255 / 70%),
+        calc(var(--px) * 5) calc(var(--px) * 3) rgb(242 246 252 / 68%),
+        calc(var(--px) * 6) calc(var(--px) * 3) rgb(240 245 250 / 66%),
+        calc(var(--px) * 7) calc(var(--px) * 3) rgb(242 246 252 / 64%),
+        calc(var(--px) * 8) calc(var(--px) * 3) rgb(240 245 250 / 62%);
+}
+
+/* Cloud 5 – low, moderate speed */
+.pc5 {
+    animation: cloudDrift5 28s linear infinite;
+    animation-delay: -15s;
+    left: -10%;
+    opacity: 0.42;
+    top: 58%;
+}
+
+.pc5::before {
+    box-shadow:
+    /* row 0 */
+        calc(var(--px) * 1) 0 rgb(255 255 255 / 74%),
+        calc(var(--px) * 2) 0 rgb(252 254 255 / 74%),
+        calc(var(--px) * 3) 0 rgb(255 255 255 / 72%),
+        /* row 1 */ 0 var(--px) rgb(248 250 255 / 78%),
+        calc(var(--px) * 1) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 80%),
+        calc(var(--px) * 3) var(--px) rgb(252 254 255 / 78%),
+        calc(var(--px) * 4) var(--px) rgb(255 255 255 / 76%),
+        /* row 2 */ calc(var(--px) * 1) calc(var(--px) * 2)
+            rgb(240 245 250 / 68%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(242 246 252 / 70%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(240 245 250 / 66%);
+}
+
+/* Cloud 6 – tiny wisp, very slow */
+.pc6 {
+    animation: cloudDrift6 44s linear infinite;
+    animation-delay: -30s;
+    left: -16%;
+    opacity: 0.38;
+    top: 24%;
+}
+
+.pc6::before {
+    box-shadow:
+    /* row 0 */
+        calc(var(--px) * 1) 0 rgb(255 255 255 / 72%),
+        calc(var(--px) * 2) 0 rgb(252 254 255 / 70%),
+        calc(var(--px) * 4) 0 rgb(255 255 255 / 68%),
+        /* row 1 */ 0 var(--px) rgb(248 250 255 / 76%),
+        calc(var(--px) * 1) var(--px) rgb(255 255 255 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(255 255 255 / 78%),
+        calc(var(--px) * 3) var(--px) rgb(252 254 255 / 76%),
+        calc(var(--px) * 4) var(--px) rgb(248 252 255 / 74%),
+        calc(var(--px) * 5) var(--px) rgb(255 255 255 / 72%),
+        /* row 2 */ calc(var(--px) * 1) calc(var(--px) * 2)
+            rgb(242 246 252 / 66%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(245 248 255 / 68%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(242 246 252 / 66%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(240 245 250 / 64%);
+}
+
+@keyframes cloudDrift1 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 60px), 0, 0);
+    }
+}
+
+@keyframes cloudDrift2 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 50px), 0, 0);
+    }
+}
+
+@keyframes cloudDrift3 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 40px), 0, 0);
+    }
+}
+
+@keyframes cloudDrift4 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 55px), 0, 0);
+    }
+}
+
+@keyframes cloudDrift5 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 45px), 0, 0);
+    }
+}
+
+@keyframes cloudDrift6 {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+    to {
+        transform: translate3d(calc(100vw + 35px), 0, 0);
+    }
+}
+
+/* ═══════════════════════════
+   DECORATIVE PROPS
+   ═══════════════════════════ */
+.prop {
+    display: block;
+    height: var(--px);
+    position: absolute;
+    width: var(--px);
+}
+
+/* ── pixel snowmen ──
+   Built with box-shadow: each shadow is one pixel-block.
+   Coordinate system: x right, y down from the element origin.
+   Snowman = three stacked circles (head/torso/base) + hat + arms */
+
+.snowman1 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 40px);
+    left: 8%;
+}
+
+.snowman1::before {
+    background: rgb(255 255 255 / 90%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* hat – dark */
+        calc(var(--px) * 2) 0 rgb(40 40 50 / 88%),
+        calc(var(--px) * 3) 0 rgb(40 40 50 / 88%),
+        calc(var(--px) * 4) 0 rgb(40 40 50 / 88%),
+        calc(var(--px) * 1) var(--px) rgb(45 45 55 / 90%),
+        calc(var(--px) * 2) var(--px) rgb(40 40 50 / 92%),
+        calc(var(--px) * 3) var(--px) rgb(40 40 50 / 92%),
+        calc(var(--px) * 4) var(--px) rgb(40 40 50 / 92%),
+        calc(var(--px) * 5) var(--px) rgb(45 45 55 / 90%),
+        /* head – white */ calc(var(--px) * 2) calc(var(--px) * 2)
+            rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(245 248 255 / 92%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(240 245 255 / 90%),
+        /* eyes */ calc(var(--px) * 2) calc(var(--px) * 3) rgb(20 20 30 / 80%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(245 248 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 3) rgb(20 20 30 / 80%),
+        /* nose (carrot) */ calc(var(--px) * 3) calc(var(--px) * 4)
+            rgb(255 140 50 / 85%),
+        /* torso */ calc(var(--px) * 1) calc(var(--px) * 5)
+            rgb(235 240 250 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 5) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 5) rgb(245 248 255 / 92%),
+        calc(var(--px) * 4) calc(var(--px) * 5) rgb(240 245 255 / 90%),
+        calc(var(--px) * 5) calc(var(--px) * 5) rgb(235 240 250 / 88%),
+        calc(var(--px) * 1) calc(var(--px) * 6) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 6) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 6) rgb(245 248 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 6) rgb(240 245 255 / 88%),
+        calc(var(--px) * 5) calc(var(--px) * 6) rgb(235 240 250 / 86%),
+        /* buttons */ calc(var(--px) * 3) calc(var(--px) * 5)
+            rgb(30 30 40 / 70%),
+        calc(var(--px) * 3) calc(var(--px) * 6) rgb(30 30 40 / 70%),
+        /* arms – sticks */ 0 calc(var(--px) * 5) rgb(100 70 40 / 72%),
+        calc(var(--px) * 6) calc(var(--px) * 5) rgb(100 70 40 / 72%),
+        /* base */ 0 calc(var(--px) * 7) rgb(230 238 248 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 7) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 7) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 7) rgb(245 248 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 7) rgb(240 245 255 / 88%),
+        calc(var(--px) * 5) calc(var(--px) * 7) rgb(235 240 250 / 86%),
+        calc(var(--px) * 6) calc(var(--px) * 7) rgb(230 238 248 / 84%),
+        0 calc(var(--px) * 8) rgb(228 236 246 / 82%),
+        calc(var(--px) * 1) calc(var(--px) * 8) rgb(232 238 248 / 84%),
+        calc(var(--px) * 2) calc(var(--px) * 8) rgb(238 244 252 / 86%),
+        calc(var(--px) * 3) calc(var(--px) * 8) rgb(242 248 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 8) rgb(238 244 252 / 86%),
+        calc(var(--px) * 5) calc(var(--px) * 8) rgb(232 238 248 / 84%),
+        calc(var(--px) * 6) calc(var(--px) * 8) rgb(228 236 246 / 82%);
+}
+
+.snowman2 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 34px);
+    left: 55%;
+    transform: scale(0.7);
+    transform-origin: bottom center;
+}
+
+.snowman2::before {
+    background: rgb(255 255 255 / 90%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* hat */
+        calc(var(--px) * 2) 0 rgb(85 30 30 / 85%),
+        calc(var(--px) * 3) 0 rgb(85 30 30 / 85%),
+        calc(var(--px) * 1) var(--px) rgb(90 35 35 / 88%),
+        calc(var(--px) * 2) var(--px) rgb(85 30 30 / 90%),
+        calc(var(--px) * 3) var(--px) rgb(85 30 30 / 90%),
+        calc(var(--px) * 4) var(--px) rgb(90 35 35 / 88%),
+        /* head */ calc(var(--px) * 2) calc(var(--px) * 2)
+            rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(245 248 255 / 92%),
+        /* eyes */ calc(var(--px) * 2) calc(var(--px) * 3) rgb(20 20 30 / 78%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(20 20 30 / 78%),
+        /* torso */ calc(var(--px) * 1) calc(var(--px) * 4)
+            rgb(235 240 250 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 4) rgb(235 240 250 / 88%),
+        /* base */ 0 calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 5) calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        0 calc(var(--px) * 6) rgb(228 236 246 / 82%),
+        calc(var(--px) * 1) calc(var(--px) * 6) rgb(232 238 248 / 84%),
+        calc(var(--px) * 2) calc(var(--px) * 6) rgb(238 244 252 / 86%),
+        calc(var(--px) * 3) calc(var(--px) * 6) rgb(238 244 252 / 86%),
+        calc(var(--px) * 4) calc(var(--px) * 6) rgb(232 238 248 / 84%),
+        calc(var(--px) * 5) calc(var(--px) * 6) rgb(228 236 246 / 82%);
+}
+
+/* snowman3 – medium, center-left */
+.snowman3 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 38px);
+    left: 30%;
+    transform: scale(0.85);
+    transform-origin: bottom center;
+}
+
+.snowman3::before {
+    background: rgb(255 255 255 / 90%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* hat – blue */
+        calc(var(--px) * 2) 0 rgb(50 60 120 / 86%),
+        calc(var(--px) * 3) 0 rgb(50 60 120 / 86%),
+        calc(var(--px) * 1) var(--px) rgb(55 65 125 / 88%),
+        calc(var(--px) * 2) var(--px) rgb(50 60 120 / 90%),
+        calc(var(--px) * 3) var(--px) rgb(50 60 120 / 90%),
+        calc(var(--px) * 4) var(--px) rgb(55 65 125 / 88%),
+        /* head */ calc(var(--px) * 2) calc(var(--px) * 2)
+            rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(245 248 255 / 92%),
+        /* eyes */ calc(var(--px) * 2) calc(var(--px) * 3) rgb(20 20 30 / 78%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(20 20 30 / 78%),
+        /* torso */ calc(var(--px) * 1) calc(var(--px) * 4)
+            rgb(235 240 250 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 4) rgb(235 240 250 / 88%),
+        /* base */ 0 calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 5) calc(var(--px) * 5) rgb(230 238 248 / 84%);
+}
+
+/* snowman4 – small, far right */
+.snowman4 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 30px);
+    left: 78%;
+    transform: scale(0.6);
+    transform-origin: bottom center;
+}
+
+.snowman4::before {
+    background: rgb(255 255 255 / 90%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* hat – green */
+        calc(var(--px) * 2) 0 rgb(40 90 50 / 85%),
+        calc(var(--px) * 3) 0 rgb(40 90 50 / 85%),
+        calc(var(--px) * 4) 0 rgb(40 90 50 / 85%),
+        calc(var(--px) * 1) var(--px) rgb(45 95 55 / 88%),
+        calc(var(--px) * 2) var(--px) rgb(40 90 50 / 90%),
+        calc(var(--px) * 3) var(--px) rgb(40 90 50 / 90%),
+        calc(var(--px) * 4) var(--px) rgb(40 90 50 / 90%),
+        calc(var(--px) * 5) var(--px) rgb(45 95 55 / 88%),
+        /* head */ calc(var(--px) * 2) calc(var(--px) * 2)
+            rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(245 248 255 / 92%),
+        calc(var(--px) * 4) calc(var(--px) * 2) rgb(240 245 255 / 90%),
+        /* eyes + nose */ calc(var(--px) * 2) calc(var(--px) * 3)
+            rgb(20 20 30 / 80%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(255 140 50 / 85%),
+        calc(var(--px) * 4) calc(var(--px) * 3) rgb(20 20 30 / 80%),
+        /* torso */ calc(var(--px) * 1) calc(var(--px) * 4)
+            rgb(235 240 250 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 4) rgb(245 248 255 / 92%),
+        calc(var(--px) * 4) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 5) calc(var(--px) * 4) rgb(235 240 250 / 88%),
+        /* arms */ 0 calc(var(--px) * 4) rgb(100 70 40 / 72%),
+        calc(var(--px) * 6) calc(var(--px) * 4) rgb(100 70 40 / 72%),
+        /* base */ 0 calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 5) rgb(245 248 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 5) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 6) calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        0 calc(var(--px) * 6) rgb(228 236 246 / 82%),
+        calc(var(--px) * 1) calc(var(--px) * 6) rgb(232 238 248 / 84%),
+        calc(var(--px) * 2) calc(var(--px) * 6) rgb(238 244 252 / 86%),
+        calc(var(--px) * 3) calc(var(--px) * 6) rgb(242 248 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 6) rgb(238 244 252 / 86%),
+        calc(var(--px) * 5) calc(var(--px) * 6) rgb(232 238 248 / 84%),
+        calc(var(--px) * 6) calc(var(--px) * 6) rgb(228 236 246 / 82%);
+}
+
+/* lower shoulder snowmen (below the road) */
+.snowmanLow1 {
+    bottom: 12px;
+    left: 20%;
+    opacity: 0.9;
+    transform: scale(0.5);
+    transform-origin: bottom center;
+}
+
+.snowmanLow2 {
+    bottom: 14px;
+    left: 66%;
+    opacity: 0.88;
+    transform: scale(0.42);
+    transform-origin: bottom center;
+}
+
+.snowmanLow1::before,
+.snowmanLow2::before {
+    background: rgb(255 255 255 / 90%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+        calc(var(--px) * 2) 0 rgb(42 42 52 / 86%),
+        calc(var(--px) * 3) 0 rgb(42 42 52 / 86%),
+        calc(var(--px) * 1) var(--px) rgb(48 48 58 / 88%),
+        calc(var(--px) * 2) var(--px) rgb(42 42 52 / 90%),
+        calc(var(--px) * 3) var(--px) rgb(42 42 52 / 90%),
+        calc(var(--px) * 4) var(--px) rgb(48 48 58 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(245 248 255 / 92%),
+        calc(var(--px) * 2) calc(var(--px) * 3) rgb(22 22 30 / 78%),
+        calc(var(--px) * 3) calc(var(--px) * 3) rgb(255 145 55 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 4) rgb(235 240 250 / 88%),
+        calc(var(--px) * 2) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 3) calc(var(--px) * 4) rgb(240 245 255 / 90%),
+        calc(var(--px) * 4) calc(var(--px) * 4) rgb(235 240 250 / 88%),
+        0 calc(var(--px) * 5) rgb(230 238 248 / 84%),
+        calc(var(--px) * 1) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 2) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 3) calc(var(--px) * 5) rgb(240 245 255 / 88%),
+        calc(var(--px) * 4) calc(var(--px) * 5) rgb(235 240 250 / 86%),
+        calc(var(--px) * 5) calc(var(--px) * 5) rgb(230 238 248 / 84%);
+}
+
+/* ── pixel flowers ──
+   Small colorful pixel sprites near the road on the summer side.
+   Each uses box-shadow to draw petals + stem + leaf. */
+
+.flower1 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 4px);
+    left: 10%;
+}
+
+.flower1::before {
+    background: rgb(60 140 40 / 80%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* stem */
+        calc(var(--px) * 2) 0 rgb(55 135 35 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(60 140 40 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(60 140 40 / 82%),
+        /* leaf */ calc(var(--px) * 3) calc(var(--px) * 2) rgb(80 170 50 / 72%),
+        calc(var(--px) * 1) calc(var(--px) * 3) rgb(65 145 42 / 74%),
+        /* petals – red */ calc(var(--px) * 1) calc(var(--px) * -2)
+            rgb(255 80 90 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(255 80 90 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(255 90 100 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(255 90 100 / 80%),
+        /* center – yellow */ calc(var(--px) * 2) calc(var(--px) * -2)
+            rgb(255 220 60 / 90%);
+}
+
+.flower2 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 2px);
+    left: 30%;
+    transform: scale(0.8);
+    transform-origin: bottom center;
+}
+
+.flower2::before {
+    background: rgb(55 130 38 / 78%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* stem */
+        calc(var(--px) * 2) 0 rgb(55 130 38 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(58 135 40 / 80%),
+        /* leaf */ calc(var(--px) * 1) var(--px) rgb(75 160 48 / 70%),
+        /* petals – purple */ calc(var(--px) * 1) calc(var(--px) * -2)
+            rgb(180 100 220 / 80%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(180 100 220 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(190 110 230 / 78%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(190 110 230 / 78%),
+        /* center – yellow */ calc(var(--px) * 2) calc(var(--px) * -2)
+            rgb(255 230 80 / 88%);
+}
+
+.flower3 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 6px);
+    left: 50%;
+    transform: scale(0.9);
+    transform-origin: bottom center;
+}
+
+.flower3::before {
+    background: rgb(58 135 40 / 78%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* stem */
+        calc(var(--px) * 2) 0 rgb(55 130 38 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(58 135 40 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(60 140 42 / 82%),
+        /* leaf */ calc(var(--px) * 3) var(--px) rgb(75 160 48 / 70%),
+        /* petals – yellow/orange */ calc(var(--px) * 1) calc(var(--px) * -2)
+            rgb(255 180 50 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(255 180 50 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(255 190 60 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(255 190 60 / 80%),
+        /* center – dark orange */ calc(var(--px) * 2) calc(var(--px) * -2)
+            rgb(200 120 30 / 88%);
+}
+
+/* flower4 – pink, right side */
+.flower4 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 3px);
+    left: 70%;
+    transform: scale(0.85);
+    transform-origin: bottom center;
+}
+
+.flower4::before {
+    background: rgb(58 135 40 / 78%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* stem */
+        calc(var(--px) * 2) 0 rgb(55 130 38 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(58 135 40 / 80%),
+        /* leaf */ calc(var(--px) * 1) var(--px) rgb(75 160 48 / 70%),
+        /* petals – pink */ calc(var(--px) * 1) calc(var(--px) * -2)
+            rgb(255 130 170 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(255 130 170 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(255 140 180 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(255 140 180 / 80%),
+        /* center – white */ calc(var(--px) * 2) calc(var(--px) * -2)
+            rgb(255 245 230 / 90%);
+}
+
+/* flower5 – blue, far right */
+.flower5 {
+    bottom: calc(var(--road-bottom) + var(--road-h) + 5px);
+    left: 88%;
+}
+
+.flower5::before {
+    background: rgb(55 130 38 / 78%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+    /* stem */
+        calc(var(--px) * 2) 0 rgb(55 130 38 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(58 135 40 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(60 140 42 / 82%),
+        /* leaf */ calc(var(--px) * 3) calc(var(--px) * 2) rgb(80 170 50 / 72%),
+        /* petals – light blue */ calc(var(--px) * 1) calc(var(--px) * -2)
+            rgb(100 180 255 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(100 180 255 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(110 190 255 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(110 190 255 / 80%),
+        /* center – yellow */ calc(var(--px) * 2) calc(var(--px) * -2)
+            rgb(255 230 80 / 90%);
+}
+
+/* lower shoulder flowers (below the road) */
+.flowerLow1 {
+    bottom: 10px;
+    left: 26%;
+    opacity: 0.88;
+    transform: scale(0.62);
+    transform-origin: bottom center;
+}
+
+.flowerLow2 {
+    bottom: 11px;
+    left: 78%;
+    opacity: 0.86;
+    transform: scale(0.58);
+    transform-origin: bottom center;
+}
+
+.flowerLow1::before,
+.flowerLow2::before {
+    background: rgb(58 135 40 / 78%);
+    content: "";
+    display: block;
+    height: var(--px);
+    width: var(--px);
+    box-shadow:
+        calc(var(--px) * 2) 0 rgb(55 130 38 / 78%),
+        calc(var(--px) * 2) var(--px) rgb(58 135 40 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * 2) rgb(60 140 42 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * 2) rgb(80 170 50 / 72%),
+        calc(var(--px) * 1) calc(var(--px) * -2) rgb(255 125 165 / 82%),
+        calc(var(--px) * 3) calc(var(--px) * -2) rgb(255 125 165 / 82%),
+        calc(var(--px) * 2) calc(var(--px) * -3) rgb(255 140 180 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -1) rgb(255 140 180 / 80%),
+        calc(var(--px) * 2) calc(var(--px) * -2) rgb(255 240 210 / 90%);
+}
+
+/* ═══════════════════════════
+   DIVIDER
+   ═══════════════════════════ */
+.divider {
+    background: linear-gradient(
+        180deg,
+        rgb(255 255 255 / 18%) 0%,
+        rgb(255 255 255 / 8%) 45%,
+        rgb(255 255 255 / 3%) 100%
+    );
+    bottom: calc(var(--road-bottom) + var(--road-h));
+    height: min(55vh, 480px);
+    left: 50%;
+    opacity: 0.36;
+    position: absolute;
+    transform: translateX(-50%);
+    width: 1px;
+}
+
+.divider::before {
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgb(186 215 238 / 42%) 50%,
+        transparent 100%
+    );
+    content: "";
+    filter: blur(10px);
+    height: 100%;
+    left: 50%;
+    opacity: 0.65;
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    width: 56px;
+}
+
+/* ═══════════════════════════
+   ROAD
+   ═══════════════════════════ */
+.road {
+    background: linear-gradient(
+        180deg,
+        rgb(62 66 74 / 78%) 0%,
+        rgb(48 52 60 / 85%) 100%
+    );
+    border-top: 2px solid rgb(180 185 195 / 22%);
+    bottom: var(--road-bottom);
+    height: var(--road-h);
+    left: 0;
+    opacity: 0.58;
+    position: absolute;
+    width: 100%;
+}
+
+.lane {
+    animation: laneScroll 4s linear infinite;
+    background: repeating-linear-gradient(
+        90deg,
+        transparent 0 28px,
+        rgb(255 255 255 / 50%) 28px 50px
+    );
+    height: 3px;
+    left: -15%;
+    opacity: 0.6;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 130%;
+    will-change: transform;
+}
+
+@keyframes laneScroll {
+    from {
+        transform: translate3d(0, -50%, 0);
+    }
+    to {
+        transform: translate3d(-50px, -50%, 0);
+    }
+}
+
+/* ═══════════════════════════
+   CAR
+   ═══════════════════════════ */
+
+/* carTrack handles horizontal position (drives left ↔ right) */
+.carTrack {
+    animation: driveLoop var(--drive-duration) ease-in-out infinite;
+    bottom: calc(var(--road-bottom) + 12px);
+    left: 0;
+    position: absolute;
+    transform: translate3d(4vw, 0, 0);
+    will-change: transform;
+}
+
+/* carDirection handles the scaleX flip so the car faces
+   the direction it is driving. Separate from carTrack
+   because combining scaleX with translate3d in the same
+   keyframe is unreliable. */
+.carDirection {
+    animation: carFlip var(--drive-duration) steps(1, end) infinite;
+    transform: scaleX(1);
+    transform-origin: center center;
+}
+
+.car {
+    animation: carBounce var(--drive-duration) ease-in-out infinite;
+    height: 24px;
+    position: relative;
+    width: 82px;
+}
+
+.carBody {
+    background: linear-gradient(180deg, #d65c3e, #c24a30);
+    border-radius: 4px 6px 3px 3px;
+    bottom: 0;
+    height: 20px;
+    left: 0;
+    position: absolute;
+    width: 82px;
+}
+
+.carCabin {
+    background: linear-gradient(180deg, #da6a4a, #c8543a);
+    border-radius: 6px 8px 0 0;
+    height: 12px;
+    left: 16px;
+    position: absolute;
+    top: -4px;
+    width: 38px;
+}
+
+.carWindow {
+    background: linear-gradient(
+        180deg,
+        rgb(165 215 255 / 85%),
+        rgb(130 190 240 / 75%)
+    );
+    border-radius: 3px 4px 0 0;
+    height: 8px;
+    left: 20px;
+    position: absolute;
+    top: -2px;
+    width: 14px;
+}
+
+.carWindow::after {
+    background: linear-gradient(
+        180deg,
+        rgb(145 200 248 / 80%),
+        rgb(115 175 230 / 70%)
+    );
+    border-radius: 3px 4px 0 0;
+    content: "";
+    height: 8px;
+    left: 17px;
+    position: absolute;
+    top: 0;
+    width: 14px;
+}
+
+.headlight {
+    background: rgb(255 235 160 / 90%);
+    border-radius: 1px;
+    box-shadow: 2px 0 6px rgb(255 235 160 / 40%);
+    height: 5px;
+    position: absolute;
+    right: 0;
+    top: 10px;
+    width: 4px;
+}
+
+.tailLight {
+    background: rgb(255 100 100 / 80%);
+    border-radius: 1px;
+    box-shadow: -2px 0 5px rgb(255 80 80 / 30%);
+    height: 4px;
+    left: 0;
+    position: absolute;
+    top: 11px;
+    width: 3px;
+}
+
+/* ── wheels ── */
+.wheel {
+    animation: wheelSpin var(--drive-duration) linear infinite;
+    background: rgb(35 35 40 / 92%);
+    border-radius: 50%;
+    bottom: -5px;
+    height: 16px;
+    overflow: hidden;
+    position: absolute;
+    width: 16px;
+}
+
+.wheelFront {
+    left: 12px;
+}
+
+.wheelRear {
+    right: 12px;
+}
+
+.tireFill {
+    border-radius: 50%;
+    inset: 2px;
+    position: absolute;
+}
+
+.summerTire {
+    animation: summerTirePhase var(--drive-duration) steps(1, end) infinite;
+    background: rgb(50 50 55);
+    opacity: 0;
+}
+
+.winterTire {
+    animation: winterTirePhase var(--drive-duration) steps(1, end) infinite;
+    background: repeating-conic-gradient(
+        rgb(180 200 220) 0 45deg,
+        rgb(140 165 190) 45deg 90deg
+    );
+    opacity: 1;
+}
+
+.hubcap {
+    background: radial-gradient(
+        circle,
+        rgb(200 200 205 / 90%) 0%,
+        rgb(140 140 150 / 70%) 100%
+    );
+    border-radius: 50%;
+    height: 6px;
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+}
+
+/* ── drive animation ──
+   Timeline (30s loop):
+   0-6%   : parked at left (winter side)
+   6-24%  : drive right → center
+   24-32% : pit-stop at center (swap tires)
+   32-52% : drive right → far right (summer side)
+   52-72% : drive left ← back to center
+   72-80% : pit-stop at center (swap tires)
+   80-96% : drive left ← back to start
+   96-100%: parked at left */
+@keyframes driveLoop {
+    0%,
+    6% {
+        transform: translate3d(4vw, 0, 0);
+    }
+    24% {
+        transform: translate3d(calc(50vw - 44px), 0, 0);
+    }
+    32% {
+        transform: translate3d(calc(50vw - 44px), 0, 0);
+    }
+    52% {
+        transform: translate3d(calc(100vw - 100px), 0, 0);
+    }
+    72% {
+        transform: translate3d(calc(50vw - 44px), 0, 0);
+    }
+    80% {
+        transform: translate3d(calc(50vw - 44px), 0, 0);
+    }
+    96%,
+    100% {
+        transform: translate3d(4vw, 0, 0);
+    }
+}
+
+/* Car flip – face right when driving right, face left when driving left.
+   Steps(1) for instant flip, no smooth transition.
+   0-52%  : driving right → scaleX(1)
+   52-96% : driving left  → scaleX(-1)
+   96-100%: back to start → scaleX(1) */
+@keyframes carFlip {
+    0% {
+        transform: scaleX(1);
+    }
+    52% {
+        transform: scaleX(-1);
+    }
+    96% {
+        transform: scaleX(1);
+    }
+}
+
+@keyframes carBounce {
+    0%,
+    23%,
+    33%,
+    71%,
+    81%,
+    100% {
+        transform: translateY(0);
+    }
+    27%,
+    75% {
+        transform: translateY(-2px);
+    }
+}
+
+@keyframes wheelSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+    24% {
+        transform: rotate(640deg);
+    }
+    32% {
+        transform: rotate(660deg);
+    }
+    52% {
+        transform: rotate(1300deg);
+    }
+    72% {
+        transform: rotate(1940deg);
+    }
+    80% {
+        transform: rotate(1960deg);
+    }
+    96% {
+        transform: rotate(2600deg);
+    }
+    100% {
+        transform: rotate(2620deg);
+    }
+}
+
+@keyframes summerTirePhase {
+    0%,
+    23% {
+        opacity: 0;
+    }
+    24%,
+    74% {
+        opacity: 1;
+    }
+    75%,
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes winterTirePhase {
+    0%,
+    23% {
+        opacity: 1;
+    }
+    24%,
+    74% {
+        opacity: 0;
+    }
+    75%,
+    100% {
+        opacity: 1;
+    }
+}
+
+/* ═══════════════════════════
+   RESPONSIVE
+   ═══════════════════════════ */
+@media (max-width: 720px) {
+    .scene {
+        --px: 3px;
+        --road-h: clamp(32px, 5vw, 46px);
+        --road-bottom: clamp(16px, 3.8vh, 36px);
+        --drive-duration: 36s;
+    }
+
+    .moon {
+        height: 28px;
+        width: 28px;
+    }
+
+    .sun {
+        height: 34px;
+        width: 34px;
+    }
+
+    .car {
+        height: 20px;
+        width: 66px;
+    }
+
+    .carBody {
+        height: 16px;
+        width: 66px;
+    }
+
+    .carCabin {
+        height: 10px;
+        left: 12px;
+        top: -3px;
+        width: 30px;
+    }
+
+    .carWindow {
+        height: 7px;
+        left: 15px;
+        top: -1px;
+        width: 11px;
+    }
+
+    .carWindow::after {
+        height: 7px;
+        left: 13px;
+        width: 11px;
+    }
+
+    .wheel {
+        bottom: -4px;
+        height: 13px;
+        width: 13px;
+    }
+
+    .wheelFront {
+        left: 8px;
+    }
+
+    .wheelRear {
+        right: 8px;
+    }
+
+    .hubcap {
+        height: 5px;
+        width: 5px;
+    }
+
+    .snowman1 {
+        transform: scale(0.7);
+    }
+
+    .snowman2 {
+        transform: scale(0.5);
+    }
+
+    .snowman3 {
+        transform: scale(0.6);
+    }
+
+    .snowman4 {
+        transform: scale(0.45);
+    }
+
+    .snowmanLow1 {
+        transform: scale(0.4);
+    }
+
+    .snowmanLow2 {
+        transform: scale(0.35);
+    }
+
+    .flower1 {
+        transform: scale(0.7);
+    }
+
+    .flower2 {
+        transform: scale(0.6);
+    }
+
+    .flower3 {
+        transform: scale(0.7);
+    }
+
+    .flower4 {
+        transform: scale(0.6);
+    }
+
+    .flower5 {
+        transform: scale(0.7);
+    }
+
+    .flowerLow1 {
+        transform: scale(0.45);
+    }
+
+    .flowerLow2 {
+        transform: scale(0.42);
+    }
+}
+
+/* ═══════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+    .snowA,
+    .snowB,
+    .snowC,
+    .snowD,
+    .pc1,
+    .pc2,
+    .pc3,
+    .pc4,
+    .pc5,
+    .pc6,
+    .lane,
+    .carTrack,
+    .carDirection,
+    .car,
+    .wheel,
+    .summerTire,
+    .winterTire {
+        animation: none;
+    }
+
+    .carTrack {
+        transform: translate3d(calc(50vw - 44px), 0, 0);
+    }
+
+    .carDirection {
+        transform: scaleX(1);
+    }
+
+    .summerTire {
+        opacity: 0;
+    }
+
+    .winterTire {
+        opacity: 1;
+    }
+}
