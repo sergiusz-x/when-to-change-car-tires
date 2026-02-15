@@ -8,12 +8,10 @@ You choose a city (or use auto-detection), then the app calculates a clear recom
 
 ## 🌐 Live Preview
 
-Visit the live website at: **[soon](https://sergiusz.dev)**
+Visit the live website at: **[when-to-change-car-tires.vercel.app](https://when-to-change-car-tires.vercel.app/)**
 
 
 ## 🖼️ Preview
-
-Screenshots are stored in `docs/screenshots/`.
 
 ![Home screen](docs/screenshots/home.png)
 
