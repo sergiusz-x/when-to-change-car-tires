@@ -1,10 +1,9 @@
-import type { GeoLocation, RecommendationResult, TireType } from "@/types"
+import type { GeoLocation, RecommendationResult } from "@/types"
 import { formatDateForLocale, getTranslations, type Locale } from "@/lib/i18n"
 
 type RecommendationCardProps = {
     location: GeoLocation;
     recommendation: RecommendationResult;
-    currentTire: TireType;
     locale: Locale;
 }
 
@@ -19,7 +18,6 @@ function hasAnyMilestone(recommendation: RecommendationResult): boolean {
 export default function RecommendationCard({
     location,
     recommendation,
-    currentTire,
     locale,
 }: RecommendationCardProps) {
     const messages = getTranslations(locale)
@@ -30,23 +28,11 @@ export default function RecommendationCard({
     return (
         <section className="resultCard" aria-live="polite">
             <p className="eyebrow">{messages.recommendation.forCity(location.name)}</p>
-            <p className="muted compact">
-                {currentTire === "WINTER"
-                    ? messages.recommendation.currentSetupWinter
-                    : messages.recommendation.currentSetupSummer}
-            </p>
-
-            {milestonesFound ? (
-                <h2>
-                    {recommendation.targetTire === "WINTER"
-                        ? messages.recommendation.switchToWinter
-                        : messages.recommendation.switchToSummer}
-                </h2>
-            ) : (
-                <h2>
-                    {currentTire === "WINTER" ? messages.recommendation.keepWinter : messages.recommendation.keepSummer}
-                </h2>
-            )}
+            <h2>
+                {recommendation.targetTire === "WINTER"
+                    ? messages.recommendation.recommendedWinter
+                    : messages.recommendation.recommendedSummer}
+            </h2>
 
             {!milestonesFound && (
                 <p className="muted">{messages.recommendation.noTransitionVisible}</p>

@@ -23,7 +23,7 @@ import {
 } from "@/lib/debug/overrides"
 import type { DebugTransitionMode } from "@/lib/debug/overrides"
 import { computeRecommendation } from "@/lib/recommendation/engine"
-import { inferCurrentTire } from "@/lib/recommendation/inferCurrentTire"
+import { inferRecommendedTire } from "@/lib/recommendation/inferRecommendedTire"
 import { fetchWeatherSeries, searchCities } from "@/lib/weather/openMeteoClient"
 import type { GeoLocation, TireType, WeatherSeries } from "@/types"
 
@@ -431,26 +431,6 @@ function HomeContent() {
 
     const canRun = useMemo(() => selectedCity !== null, [selectedCity])
 
-    const previewCurrentTire = useMemo(() => {
-        if (!selectedCity) {
-            return null
-        }
-
-        if (debugSettings.active) {
-            return debugSettings.mode === "SUMMER_TO_WINTER" ? "SUMMER" : "WINTER"
-        }
-
-        return inferCurrentTire(selectedCity.timezone, selectedCity.latitude, debugSettings.dateOverride)
-    }, [selectedCity, debugSettings])
-
-    const previewTargetTire = useMemo(() => {
-        if (!previewCurrentTire) {
-            return null
-        }
-
-        return previewCurrentTire === "WINTER" ? "SUMMER" : "WINTER"
-    }, [previewCurrentTire])
-
     const handleSubmit = async () => {
         if (!selectedCity) {
             return
@@ -463,16 +443,14 @@ function HomeContent() {
             const weatherData = await fetchWeatherSeries(selectedCity)
             const weatherForRecommendation = applyDebugWeatherOverrides(weatherData, debugSettings)
 
-            const inferred = inferCurrentTire(
-                weatherData.timezone,
-                selectedCity.latitude,
-                debugSettings.dateOverride,
-            )
+            const recommendedTire = inferRecommendedTire(weatherForRecommendation)
             const currentTireToUse = debugSettings.active
                 ? debugSettings.mode === "SUMMER_TO_WINTER"
                     ? "SUMMER"
                     : "WINTER"
-                : inferred
+                : recommendedTire === "WINTER"
+                    ? "SUMMER"
+                    : "WINTER"
 
             setCurrentTire(currentTireToUse)
             setWeather(weatherForRecommendation)
@@ -664,23 +642,11 @@ function HomeContent() {
 
                         <button
                             type="button"
-                            className={`primaryAction ${
-                                previewTargetTire === "SUMMER"
-                                    ? "summerAction"
-                                    : previewTargetTire === "WINTER"
-                                        ? "winterAction"
-                                        : ""
-                            }`}
+                            className="primaryAction"
                             disabled={!canRun || loadingResult}
                             onClick={handleSubmit}
                         >
-                            {loadingResult
-                                ? messages.form.checking
-                                : previewTargetTire === "SUMMER"
-                                    ? messages.form.showSummerRecommendation
-                                    : previewTargetTire === "WINTER"
-                                        ? messages.form.showWinterRecommendation
-                                        : messages.form.showRecommendation}
+                            {loadingResult ? messages.form.checking : messages.form.showRecommendation}
                         </button>
 
                         <details className="mechanismDetails">
@@ -702,7 +668,6 @@ function HomeContent() {
                         <RecommendationCard
                             location={selectedCity}
                             recommendation={recommendation}
-                            currentTire={currentTire}
                             locale={locale}
                         />
                     )}

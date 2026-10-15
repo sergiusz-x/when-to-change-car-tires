@@ -73,12 +73,8 @@ type Messages = {
     };
     recommendation: {
         forCity: (city: string) => string;
-        currentSetupWinter: string;
-        currentSetupSummer: string;
-        switchToWinter: string;
-        switchToSummer: string;
-        keepWinter: string;
-        keepSummer: string;
+        recommendedWinter: string;
+        recommendedSummer: string;
         noTransitionVisible: string;
         canStartFrom: string;
         recommendedWindow: string;
@@ -207,13 +203,10 @@ const MESSAGES: Record<Locale, Messages> = {
         },
         recommendation: {
             forCity: (city) => `Rekomendacja dla ${city}`,
-            currentSetupWinter: "Obecny zestaw: opony zimowe",
-            currentSetupSummer: "Obecny zestaw: opony letnie",
-            switchToWinter: "Zmień na opony zimowe",
-            switchToSummer: "Zmień na opony letnie",
-            keepWinter: "Zostań przy oponach zimowych",
-            keepSummer: "Zostań przy oponach letnich",
-            noTransitionVisible: "W obecnej prognozie nie widać zmiany sezonu. Sprawdź ponownie za kilka dni.",
+            recommendedWinter: "Rekomendowane opony: zimowe",
+            recommendedSummer: "Rekomendowane opony: letnie",
+            noTransitionVisible:
+                "Prognoza nie pokazuje wyraźnego okna zmiany. Ten typ opon pasuje do większości najbliższych dni.",
             canStartFrom: "Możesz zacząć od",
             recommendedWindow: "Rekomendowane okno",
             latestSafeDate: "Najpóźniejsza bezpieczna data",
@@ -345,14 +338,10 @@ const MESSAGES: Record<Locale, Messages> = {
         },
         recommendation: {
             forCity: (city) => `Recommendation for ${city}`,
-            currentSetupWinter: "Current setup: Winter tires",
-            currentSetupSummer: "Current setup: Summer tires",
-            switchToWinter: "Switch to Winter tires",
-            switchToSummer: "Switch to Summer tires",
-            keepWinter: "Keep your Winter tires",
-            keepSummer: "Keep your Summer tires",
+            recommendedWinter: "Recommended tires: Winter",
+            recommendedSummer: "Recommended tires: Summer",
             noTransitionVisible:
-                "No seasonal transition visible in the current forecast. Check again in a few days.",
+                "The forecast shows no clear switch window. These tires fit most of the upcoming days.",
             canStartFrom: "You can start from",
             recommendedWindow: "Recommended window",
             latestSafeDate: "Latest safe date",
