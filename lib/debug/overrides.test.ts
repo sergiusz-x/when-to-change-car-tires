@@ -4,17 +4,19 @@ import type { WeatherSeries } from "@/types"
 
 function buildWeatherSeries(): WeatherSeries {
     return {
+        locationId: "warsaw",
+        seasonalAvailable: false,
         fetchedAt: "2026-03-01T10:00:00.000Z",
         timezone: "Europe/Warsaw",
         history: [
-            { date: "2026-02-26", tempMeanC: 1, tempMinC: -4 },
-            { date: "2026-02-27", tempMeanC: 2, tempMinC: -3 },
-            { date: "2026-02-28", tempMeanC: 3, tempMinC: -2 },
+            { date: "2026-02-26", tempMeanC: 1, tempMinC: -4, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
+            { date: "2026-02-27", tempMeanC: 2, tempMinC: -3, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
+            { date: "2026-02-28", tempMeanC: 3, tempMinC: -2, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
         ],
         forecast: [
-            { date: "2026-03-01", tempMeanC: 4, tempMinC: -1 },
-            { date: "2026-03-02", tempMeanC: 5, tempMinC: 0 },
-            { date: "2026-03-03", tempMeanC: 6, tempMinC: 1 },
+            { date: "2026-03-01", tempMeanC: 4, tempMinC: -1, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
+            { date: "2026-03-02", tempMeanC: 5, tempMinC: 0, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
+            { date: "2026-03-03", tempMeanC: 6, tempMinC: 1, snowfallCm: 0, weatherCode: 0, source: "FORECAST" },
         ],
     }
 }
@@ -101,7 +103,7 @@ describe("applyDebugWeatherOverrides", () => {
         expect(generatedMeans).not.toEqual(originalMeans)
 
         for (const point of first.history.concat(first.forecast)) {
-            expect(point.tempMinC).toBeLessThanOrEqual(point.tempMeanC - 0.3)
+            expect(point.tempMinC).toBeLessThanOrEqual(point.tempMeanC! - 0.3)
         }
     })
 })

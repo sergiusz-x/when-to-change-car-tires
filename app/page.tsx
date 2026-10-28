@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import RecommendationCard from "@/components/RecommendationCard"
@@ -18,14 +18,16 @@ import {
     type Locale,
 } from "@/lib/i18n"
 import {
-    applyDebugWeatherOverrides,
+    createDebugWeather,
     parseDebugSettings,
 } from "@/lib/debug/overrides"
 import type { DebugTransitionMode } from "@/lib/debug/overrides"
-import { computeRecommendation } from "@/lib/recommendation/engine"
-import { inferRecommendedTire } from "@/lib/recommendation/inferRecommendedTire"
+import { computeRecommendation, CURRENT_FORECAST_MS } from "@/lib/recommendation/engine"
+import { getPlannerMessages } from "@/lib/recommendation/messages"
+import { seasonalTireDefault } from "@/lib/recommendation/seasonalDefault"
+import { readStoredPreference, subscribeToStoredPreferences, writeStoredPreference } from "@/lib/browserStorage"
 import { fetchWeatherSeries, searchCities } from "@/lib/weather/openMeteoClient"
-import type { GeoLocation, TireType, WeatherSeries } from "@/types"
+import type { GeoLocation, RefreshOutcome, TireSetup, WeatherSeries } from "@/types"
 
 type IpLocationResponse = {
     city?: string;
@@ -65,6 +67,14 @@ function safeTimezone(value: unknown): string {
     }
 }
 
+function getBrowserLocale(): Locale {
+    return normalizeLocale(readStoredPreference(LOCALE_STORAGE_KEY)) ?? detectLocaleFromNavigator(window.navigator.language)
+}
+
+function getStoredDevPanelVisibility(): boolean {
+    return readStoredPreference("devDebugPanelVisible") !== "0"
+}
+
 function HomeContent() {
     const router = useRouter()
     const pathname = usePathname()
@@ -73,27 +83,71 @@ function HomeContent() {
     const localeManuallySelectedRef = useRef(false)
     const languageMenuRef = useRef<HTMLDivElement | null>(null)
     const [query, setQuery] = useState("")
-    const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE)
-    const [cityOptions, setCityOptions] = useState<GeoLocation[]>([])
+    const [localeSelection, setLocale] = useState<Locale | null>(null)
+    const browserLocale = useSyncExternalStore(subscribeToStoredPreferences, getBrowserLocale, () => DEFAULT_LOCALE)
+    const locale = localeSelection ?? browserLocale
+    const [citySearch, setCitySearch] = useState<{ query: string; locale: Locale; items: GeoLocation[] } | null>(null)
     const [selectedCity, setSelectedCity] = useState<GeoLocation | null>(null)
-    const [currentTire, setCurrentTire] = useState<TireType | null>(null)
-    const [weather, setWeather] = useState<WeatherSeries | null>(null)
+    const [setupOverride, setSetupOverride] = useState<TireSetup | null>(null)
+    const [result, setResult] = useState<{
+        location: GeoLocation;
+        weather: WeatherSeries;
+        refreshOutcome: RefreshOutcome;
+        debugKey: string;
+    } | null>(null)
+    const [now, setNow] = useState(() => new Date())
+    const requestRef = useRef<{ generation: number; controller?: AbortController }>({ generation: 0 })
     const [loadingAutoCity, setLoadingAutoCity] = useState(true)
     const [autoCityError, setAutoCityError] = useState<UiErrorKey | null>(null)
-    const [loadingCities, setLoadingCities] = useState(false)
     const [loadingResult, setLoadingResult] = useState(false)
     const [error, setError] = useState<UiErrorKey | null>(null)
-    const [devPanelVisible, setDevPanelVisible] = useState(true)
+    const [devPanelOverride, setDevPanelOverride] = useState<boolean | null>(null)
+    const storedDevPanelVisibility = useSyncExternalStore(subscribeToStoredPreferences, getStoredDevPanelVisibility, () => true)
+    const devPanelVisible = devPanelOverride ?? storedDevPanelVisibility
     const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
     const messages = useMemo(() => getTranslations(locale), [locale])
+    const setup = setupOverride ?? (selectedCity ? seasonalTireDefault(now, selectedCity) : "UNKNOWN")
+    const normalizedQuery = query.trim().slice(0, MAX_CITY_QUERY_LENGTH)
+    const matchingCitySearch = citySearch?.query === normalizedQuery && citySearch.locale === locale ? citySearch : null
+    const cityOptions = matchingCitySearch?.items ?? []
+    const loadingCities = normalizedQuery.length >= 2 && !selectedCity && !matchingCitySearch
 
-    const recommendation = useMemo(() => {
-        if (!weather || !currentTire) {
-            return null
+    const plannerMessages = getPlannerMessages(locale)
+    const debugKey = searchParams.toString()
+    const visibleResult = result && result.location.id === selectedCity?.id && result.debugKey === debugKey ? result : null
+
+    const selectCity = (city: GeoLocation | null) => {
+        requestRef.current.controller?.abort()
+        requestRef.current.generation++
+        setSelectedCity(city)
+        setCitySearch(null)
+        setResult(null)
+        setLoadingResult(false)
+        setError(null)
+    }
+
+    useEffect(() => {
+        const updateClock = () => setNow(new Date())
+        const timer = window.setInterval(updateClock, 30_000)
+        window.addEventListener("focus", updateClock)
+        document.addEventListener("visibilitychange", updateClock)
+        return () => {
+            window.clearInterval(timer)
+            window.removeEventListener("focus", updateClock)
+            document.removeEventListener("visibilitychange", updateClock)
         }
+    }, [])
 
-        return computeRecommendation(weather, currentTire, locale)
-    }, [weather, currentTire, locale])
+    useEffect(() => {
+        if (!result) return
+        const expires = Date.parse(result.weather.fetchedAt) + CURRENT_FORECAST_MS + 1
+        const remaining = expires - Date.now()
+        if (remaining <= 0) return
+        const timer = window.setTimeout(() => setNow(new Date()), remaining)
+        return () => window.clearTimeout(timer)
+    }, [result])
+
+    useEffect(() => () => requestRef.current.controller?.abort(), [])
 
     const isDev = process.env.NODE_ENV === "development"
     const debugSettings = useMemo(
@@ -103,6 +157,13 @@ function HomeContent() {
             }),
         [isDev, searchParams],
     )
+    const recommendation = useMemo(() => visibleResult ? computeRecommendation(
+        visibleResult.weather, visibleResult.location, {
+            now: visibleResult.weather.simulated && debugSettings.dateOverride ? new Date(`${debugSettings.dateOverride}T12:00:00Z`) : now,
+            refreshOutcome: visibleResult.refreshOutcome,
+        },
+    ) : null, [visibleResult, now, debugSettings.dateOverride])
+
     const debugChips = useMemo(() => {
         if (!debugSettings.active) {
             return []
@@ -122,21 +183,6 @@ function HomeContent() {
 
         return chips
     }, [debugSettings, messages.debug])
-
-    useEffect(() => {
-        if (typeof window === "undefined") {
-            return
-        }
-
-        const savedLocale = normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY))
-        if (savedLocale) {
-            localeManuallySelectedRef.current = true
-            setLocale(savedLocale)
-            return
-        }
-
-        setLocale(detectLocaleFromNavigator(window.navigator.language))
-    }, [])
 
     useEffect(() => {
         if (typeof document === "undefined") {
@@ -189,24 +235,10 @@ function HomeContent() {
         }
     }, [])
 
-    useEffect(() => {
-        if (!isDev || typeof window === "undefined") {
-            return
-        }
-
-        const savedValue = window.localStorage.getItem("devDebugPanelVisible")
-        if (savedValue === "0") {
-            setDevPanelVisible(false)
-        }
-    }, [isDev])
-
-    useEffect(() => {
-        if (!isDev || typeof window === "undefined") {
-            return
-        }
-
-        window.localStorage.setItem("devDebugPanelVisible", devPanelVisible ? "1" : "0")
-    }, [devPanelVisible, isDev])
+    const setDevPanelVisible = (visible: boolean) => {
+        setDevPanelOverride(visible)
+        writeStoredPreference("devDebugPanelVisible", visible ? "1" : "0")
+    }
 
     const updateSearchParams = (updates: Record<string, string | null>) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -228,9 +260,7 @@ function HomeContent() {
         setLocale(nextLocale)
         setLanguageMenuOpen(false)
 
-        if (typeof window !== "undefined") {
-            window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale)
-        }
+        writeStoredPreference(LOCALE_STORAGE_KEY, nextLocale)
     }
 
     const renderLocaleFlag = (targetLocale: Locale) => {
@@ -321,20 +351,13 @@ function HomeContent() {
     useEffect(() => {
         let cancelled = false
         const controller = new AbortController()
-        const normalizedQuery = query.trim().slice(0, MAX_CITY_QUERY_LENGTH)
+        if (normalizedQuery.length < 2 || selectedCity) return
 
-        if (normalizedQuery.length < 2) {
-            setCityOptions([])
-            setLoadingCities(false)
-            return
-        }
-
-        setLoadingCities(true)
         const timeout = setTimeout(async () => {
             try {
                 const results = await searchCities(normalizedQuery, locale, controller.signal)
                 if (!cancelled) {
-                    setCityOptions(results)
+                    setCitySearch({ query: normalizedQuery, locale, items: results })
                 }
             } catch (error) {
                 if (error instanceof DOMException && error.name === "AbortError") {
@@ -342,11 +365,7 @@ function HomeContent() {
                 }
 
                 if (!cancelled) {
-                    setCityOptions([])
-                }
-            } finally {
-                if (!cancelled) {
-                    setLoadingCities(false)
+                    setCitySearch({ query: normalizedQuery, locale, items: [] })
                 }
             }
         }, 300)
@@ -356,7 +375,7 @@ function HomeContent() {
             controller.abort()
             clearTimeout(timeout)
         }
-    }, [query, locale])
+    }, [normalizedQuery, locale, selectedCity])
 
     useEffect(() => {
         let cancelled = false
@@ -374,7 +393,7 @@ function HomeContent() {
 
                 const ipData = (await response.json()) as IpLocationResponse
 
-                if (!cancelled && !localeManuallySelectedRef.current) {
+                if (!cancelled && !localeManuallySelectedRef.current && !normalizeLocale(readStoredPreference(LOCALE_STORAGE_KEY))) {
                     const localeFromCountry = detectLocaleFromCountry(ipData.country)
                     if (localeFromCountry) {
                         setLocale(localeFromCountry)
@@ -403,7 +422,7 @@ function HomeContent() {
                     timezone: safeTimezone(ipData.timezone),
                 }
 
-                setSelectedCity(detectedCity)
+                selectCity(detectedCity)
                 setQuery(`${detectedCity.name}, ${detectedCity.country}`)
                 setAutoCityError(null)
             } catch (error) {
@@ -432,35 +451,30 @@ function HomeContent() {
     const canRun = useMemo(() => selectedCity !== null, [selectedCity])
 
     const handleSubmit = async () => {
-        if (!selectedCity) {
-            return
-        }
-
+        if (!selectedCity) return
+        requestRef.current.controller?.abort()
+        const controller = new AbortController()
+        const generation = ++requestRef.current.generation
+        requestRef.current.controller = controller
+        const location = selectedCity
         setLoadingResult(true)
         setError(null)
-
         try {
-            const weatherData = await fetchWeatherSeries(selectedCity)
-            const weatherForRecommendation = applyDebugWeatherOverrides(weatherData, debugSettings)
-
-            const recommendedTire = inferRecommendedTire(weatherForRecommendation)
-            const currentTireToUse = debugSettings.active
-                ? debugSettings.mode === "SUMMER_TO_WINTER"
-                    ? "SUMMER"
-                    : "WINTER"
-                : recommendedTire === "WINTER"
-                    ? "SUMMER"
-                    : "WINTER"
-
-            setCurrentTire(currentTireToUse)
-            setWeather(weatherForRecommendation)
+            const weather = debugSettings.active
+                ? createDebugWeather(location, debugSettings, new Date())
+                : await fetchWeatherSeries(location, controller.signal)
+            if (generation !== requestRef.current.generation || controller.signal.aborted) return
+            setResult({ location, weather, refreshOutcome: "SUCCESS", debugKey })
+            setNow(new Date())
         } catch {
+            if (generation !== requestRef.current.generation || controller.signal.aborted) return
             setError("RECOMMENDATION_LOADING")
-
-            setCurrentTire(null)
-            setWeather(null)
+            setResult((previous) => previous?.location.id === location.id
+                ? { ...previous, refreshOutcome: "FAILURE" }
+                : null)
+            setNow(new Date())
         } finally {
-            setLoadingResult(false)
+            if (generation === requestRef.current.generation) setLoadingResult(false)
         }
     }
 
@@ -506,7 +520,6 @@ function HomeContent() {
                 <header className="pageHeader">
                     <div className="pageHeaderInner">
                         <div>
-                            <p className="eyebrow">{messages.header.eyebrow}</p>
                             <h1>{messages.header.title}</h1>
                         </div>
                     </div>
@@ -605,7 +618,7 @@ function HomeContent() {
                             onChange={(event) => {
                                 manualCityChangeRef.current = true
                                 setQuery(event.target.value.slice(0, MAX_CITY_QUERY_LENGTH))
-                                setSelectedCity(null)
+                                selectCity(null)
                                 setAutoCityError(null)
                             }}
                             autoComplete="off"
@@ -628,7 +641,7 @@ function HomeContent() {
                           type="button"
                           onClick={() => {
                               manualCityChangeRef.current = true
-                              setSelectedCity(option)
+                              selectCity(option)
                               setQuery(`${option.name}, ${option.country}`)
                               setAutoCityError(null)
                           }}
@@ -639,6 +652,24 @@ function HomeContent() {
                   ))}
                             </div>
                         )}
+
+                        <details className="tireSetupDetails">
+                            <summary>
+                                {setupOverride === null && (setup === "SUMMER" || setup === "WINTER")
+                                    ? plannerMessages.checkingChange[setup === "SUMMER" ? "WINTER" : "SUMMER"]
+                                    : <>{plannerMessages.setupCaption}{(selectedCity || setupOverride !== null) && <>: {plannerMessages.setups[setup].toLocaleLowerCase(locale)}</>}</>}
+                                <span>{plannerMessages.changeSetup}</span>
+                            </summary>
+                            <div className="tireSetupContent">
+                                <label htmlFor="tireSetup">{plannerMessages.setupLabel}</label>
+                                <select id="tireSetup" value={setup} onChange={(event) => setSetupOverride(event.target.value as TireSetup)}>
+                                    {(["SUMMER", "WINTER", "ALL_SEASON", "UNKNOWN"] as const).map((value) => (
+                                        <option key={value} value={value}>{plannerMessages.setups[value]}</option>
+                                    ))}
+                                </select>
+                                <p>{plannerMessages.setupDefaultHint}</p>
+                            </div>
+                        </details>
 
                         <button
                             type="button"
@@ -664,16 +695,17 @@ function HomeContent() {
                         {error && <p className="errorText">{messages.errors.recommendationLoading}</p>}
                     </section>
 
-                    {recommendation && selectedCity && currentTire && (
+                    {recommendation && visibleResult && (
                         <RecommendationCard
-                            location={selectedCity}
+                            location={visibleResult.location}
                             recommendation={recommendation}
+                            setup={setup}
                             locale={locale}
                         />
                     )}
 
-                    {recommendation && weather && (
-                        <WeatherBreakdown weather={weather} recommendation={recommendation} locale={locale} />
+                    {recommendation && visibleResult && (
+                        <WeatherBreakdown weather={visibleResult.weather} recommendation={recommendation} locale={locale} />
                     )}
 
                     {!recommendation && !loadingResult && (

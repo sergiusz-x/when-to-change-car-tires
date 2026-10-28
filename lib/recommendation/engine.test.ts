@@ -1,410 +1,189 @@
 import { describe, expect, it } from "vitest"
-import { computeRecommendation } from "@/lib/recommendation/engine"
-import type { DailyWeatherPoint, WeatherSeries } from "@/types"
+import { computeRecommendation, deriveTireAction } from "@/lib/recommendation/engine"
+import { CITY, forecastDay, NOW, weatherFixture } from "@/tests/weatherFixtures"
+import type { DailyWeatherPoint, TireSetup } from "@/types"
 
-function buildSeries(
-    history: Array<{ date: string; mean: number; min: number }>,
-    forecast: Array<{ date: string; mean: number; min: number }>,
-): WeatherSeries {
-    const toPoint = (item: { date: string; mean: number; min: number }): DailyWeatherPoint => ({
-        date: item.date,
-        tempMeanC: item.mean,
-        tempMinC: item.min,
+const assess = (weather = weatherFixture(), refreshOutcome: "SUCCESS" | "FAILURE" = "SUCCESS", now = NOW) =>
+    computeRecommendation(weather, CITY, { now, refreshOutcome })
+const change = (offset: number, fields: Partial<DailyWeatherPoint>) => weatherFixture({
+    forecast: Array.from({ length: 16 }, (_, index) => forecastDay(index, index === offset ? fields : {})),
+})
+
+describe("weather assessment and tire actions", () => {
+    it("prioritizes tomorrow's frost over fourteen warm days", () => {
+        const result = assess(change(1, { tempMinC: -3 }))
+        expect(result.state).toBe("WINTER_PRECAUTION")
+        expect(deriveTireAction(result, "SUMMER")).toMatchObject({ kind: "PLAN_WINTER", booking: { from: "2026-10-23", to: "2026-10-23" } })
+        expect(deriveTireAction(result, "WINTER")).toEqual({ kind: "NO_CHANGE", setup: "WINTER", conditional: false })
     })
 
-    return {
-        history: history.map(toPoint),
-        forecast: forecast.map(toPoint),
-        fetchedAt: new Date().toISOString(),
-        timezone: "Europe/Warsaw",
-    }
-}
-
-describe("computeRecommendation", () => {
-    // ==========================================================================
-    // WINTER → SUMMER  (user has winter tires, should switch to summer)
-    // ==========================================================================
-
-    describe("WINTER -> SUMMER", () => {
-        it("recommends switching when spring warmth is stable", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-03-20", mean: 8, min: 2 },
-                    { date: "2026-03-21", mean: 9, min: 3 },
-                    { date: "2026-03-22", mean: 10, min: 4 },
-                    { date: "2026-03-23", mean: 11, min: 5 },
-                    { date: "2026-03-24", mean: 12, min: 6 },
-                ],
-                [
-                    { date: "2026-03-25", mean: 12, min: 5 },
-                    { date: "2026-03-26", mean: 13, min: 6 },
-                    { date: "2026-03-27", mean: 12, min: 5 },
-                    { date: "2026-03-28", mean: 11, min: 4 },
-                    { date: "2026-03-29", mean: 12, min: 5 },
-                    { date: "2026-03-30", mean: 13, min: 6 },
-                    { date: "2026-03-31", mean: 14, min: 7 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "WINTER")
-            expect(r.targetTire).toBe("SUMMER")
-            expect(r.confidence).toBe("HIGH")
-            // canStart should be found (warm streak present)
-            expect(r.canStart.date).toBeDefined()
-            // recommended should exist and not be before canStart
-            expect(r.recommended.dateFrom).toBeDefined()
-            expect(r.recommended.dateFrom! >= r.canStart.date!).toBe(true)
-        })
-
-        it("returns NO milestone dates in deep winter (Feb, all frost)", () => {
-            // Your actual scenario — February, -5 to -8°C, all frost
-            const weather = buildSeries(
-                [
-                    { date: "2026-02-10", mean: -2, min: -5 },
-                    { date: "2026-02-11", mean: -1, min: -4 },
-                    { date: "2026-02-12", mean: 0, min: -3 },
-                    { date: "2026-02-13", mean: -1, min: -5 },
-                    { date: "2026-02-14", mean: -2, min: -4 },
-                ],
-                [
-                    { date: "2026-02-15", mean: -5, min: -9 },
-                    { date: "2026-02-16", mean: -8, min: -11 },
-                    { date: "2026-02-17", mean: -7, min: -10 },
-                    { date: "2026-02-18", mean: -4, min: -7 },
-                    { date: "2026-02-19", mean: -5, min: -7 },
-                    { date: "2026-02-20", mean: -5, min: -9 },
-                    { date: "2026-02-21", mean: -3, min: -7 },
-                    { date: "2026-02-22", mean: 2, min: -1 },
-                    { date: "2026-02-23", mean: 4, min: 2 },
-                    { date: "2026-02-24", mean: 2, min: 0 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "WINTER")
-            expect(r.targetTire).toBe("SUMMER")
-            expect(r.confidence).toBe("LOW")
-            // NO dates should be returned — it's deep winter!
-            expect(r.canStart.date).toBeUndefined()
-            expect(r.recommended.dateFrom).toBeUndefined()
-            expect(r.maxTime.date).toBeUndefined()
-        })
-
-        it("finds canStart but not recommended when warm days are intermittent", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-03-05", mean: 3, min: -2 },
-                    { date: "2026-03-06", mean: 4, min: -1 },
-                    { date: "2026-03-07", mean: 5, min: 0 },
-                    { date: "2026-03-08", mean: 4, min: -1 },
-                    { date: "2026-03-09", mean: 5, min: 0 },
-                ],
-                [
-                    { date: "2026-03-10", mean: 7, min: 1 },
-                    { date: "2026-03-11", mean: 8, min: 2 },
-                    { date: "2026-03-12", mean: 9, min: 3 },
-                    // warm streak of 3 → canStart triggers
-                    { date: "2026-03-13", mean: 3, min: -3 },
-                    // frost returns → recommended should NOT trigger
-                    { date: "2026-03-14", mean: 2, min: -4 },
-                    { date: "2026-03-15", mean: 4, min: -2 },
-                    { date: "2026-03-16", mean: 5, min: -1 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "WINTER")
-            expect(r.canStart.date).toBeDefined()
-            expect(r.recommended.dateFrom).toBeUndefined()
-            expect(r.maxTime.date).toBeUndefined()
-            expect(r.confidence).toBe("LOW")
-        })
-
-        it("triggers maxTime in hot weather (winter tires degrade)", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-04-15", mean: 12, min: 5 },
-                    { date: "2026-04-16", mean: 13, min: 6 },
-                    { date: "2026-04-17", mean: 14, min: 7 },
-                    { date: "2026-04-18", mean: 15, min: 8 },
-                    { date: "2026-04-19", mean: 14, min: 7 },
-                ],
-                [
-                    { date: "2026-04-20", mean: 15, min: 8 },
-                    { date: "2026-04-21", mean: 16, min: 9 },
-                    { date: "2026-04-22", mean: 15, min: 8 },
-                    { date: "2026-04-23", mean: 14, min: 7 },
-                    { date: "2026-04-24", mean: 15, min: 8 },
-                    { date: "2026-04-25", mean: 16, min: 9 },
-                    { date: "2026-04-26", mean: 17, min: 10 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "WINTER")
-            expect(r.maxTime.date).toBeDefined()
-            // should be soon — avg is well above 12, no frost
-            expect(r.maxTime.date! <= "2026-04-22").toBe(true)
-        })
-
-        it("uses a fallback recommended window when deadline is not visible yet", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-03-01", mean: 7, min: 2 },
-                    { date: "2026-03-02", mean: 8, min: 3 },
-                    { date: "2026-03-03", mean: 8, min: 3 },
-                    { date: "2026-03-04", mean: 9, min: 4 },
-                    { date: "2026-03-05", mean: 8, min: 3 },
-                ],
-                [
-                    { date: "2026-03-06", mean: 8, min: 2 },
-                    { date: "2026-03-07", mean: 8, min: 2 },
-                    { date: "2026-03-08", mean: 9, min: -1 },
-                    { date: "2026-03-09", mean: 8, min: 2 },
-                    { date: "2026-03-10", mean: 8, min: 2 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "WINTER")
-            expect(r.recommended.dateFrom).toBe("2026-03-05")
-            expect(r.recommended.dateTo).toBe("2026-03-10")
-            expect(r.maxTime.date).toBeUndefined()
-        })
+    it.each([0, 1, 2, 3, 6, 7, 9, 10, 15, 16])("handles a freezing forecast at D%i without shifting the event", (offset) => {
+        const weather = change(offset, { tempMinC: 0 })
+        if (offset === 16) weather.forecast.push(forecastDay(16, { tempMinC: 0 }))
+        const result = assess(weather)
+        expect(result.state).toBe(offset < 7 ? "WINTER_PRECAUTION" : offset < 16 ? "WATCH_OUTLOOK" : "SUMMER_CANDIDATE")
+        const action = deriveTireAction(result, "SUMMER")
+        if (offset === 0 || offset >= 7) expect(action.booking).toBeUndefined()
+        if (offset > 0 && offset < 7) expect(action.booking!.to < forecastDay(offset).date).toBe(true)
     })
 
-    // ==========================================================================
-    // SUMMER → WINTER  (user has summer tires, should switch to winter)
-    // ==========================================================================
-
-    describe("SUMMER -> WINTER", () => {
-        it("recommends switching when autumn cooling is clear", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-10-01", mean: 8, min: 3 },
-                    { date: "2026-10-02", mean: 7, min: 3 },
-                    { date: "2026-10-03", mean: 6, min: 2 },
-                    { date: "2026-10-04", mean: 5, min: 1 },
-                    { date: "2026-10-05", mean: 5, min: 0 },
-                ],
-                [
-                    { date: "2026-10-06", mean: 4, min: -1 },
-                    { date: "2026-10-07", mean: 3, min: -2 },
-                    { date: "2026-10-08", mean: 4, min: -1 },
-                    { date: "2026-10-09", mean: 3, min: -2 },
-                    { date: "2026-10-10", mean: 2, min: -3 },
-                    { date: "2026-10-11", mean: 3, min: -2 },
-                    { date: "2026-10-12", mean: 2, min: -4 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "SUMMER")
-            expect(r.targetTire).toBe("WINTER")
-            expect(r.canStart.date).toBeDefined()
-            expect(r.recommended.dateFrom).toBeDefined()
-            expect(r.confidence).not.toBe("LOW")
-        })
-
-        it("returns NO milestones in stable summer", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-07-01", mean: 25, min: 18 },
-                    { date: "2026-07-02", mean: 26, min: 19 },
-                    { date: "2026-07-03", mean: 25, min: 18 },
-                    { date: "2026-07-04", mean: 24, min: 17 },
-                    { date: "2026-07-05", mean: 25, min: 18 },
-                ],
-                [
-                    { date: "2026-07-06", mean: 26, min: 19 },
-                    { date: "2026-07-07", mean: 27, min: 20 },
-                    { date: "2026-07-08", mean: 26, min: 19 },
-                    { date: "2026-07-09", mean: 25, min: 18 },
-                    { date: "2026-07-10", mean: 26, min: 19 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "SUMMER")
-            expect(r.targetTire).toBe("WINTER")
-            expect(r.confidence).toBe("LOW")
-            // No cold transition visible → no dates
-            expect(r.canStart.date).toBeUndefined()
-            expect(r.recommended.dateFrom).toBeUndefined()
-            expect(r.maxTime.date).toBeUndefined()
-        })
-
-        it("triggers maxTime when frost is imminent", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-11-01", mean: 4, min: 0 },
-                    { date: "2026-11-02", mean: 3, min: -1 },
-                    { date: "2026-11-03", mean: 2, min: -2 },
-                    { date: "2026-11-04", mean: 2, min: -3 },
-                    { date: "2026-11-05", mean: 1, min: -4 },
-                ],
-                [
-                    { date: "2026-11-06", mean: 0, min: -6 },
-                    { date: "2026-11-07", mean: -1, min: -8 },
-                    { date: "2026-11-08", mean: -2, min: -9 },
-                    { date: "2026-11-09", mean: -3, min: -10 },
-                    { date: "2026-11-10", mean: -2, min: -9 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "SUMMER")
-            expect(r.maxTime.date).toBeDefined()
-            // Should be very soon — already freezing
-            expect(r.maxTime.date! <= "2026-11-06").toBe(true)
-        })
-
-        it("gives LOW confidence when weather is mild and ambiguous", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-09-20", mean: 14, min: 8 },
-                    { date: "2026-09-21", mean: 13, min: 7 },
-                    { date: "2026-09-22", mean: 12, min: 6 },
-                    { date: "2026-09-23", mean: 13, min: 7 },
-                    { date: "2026-09-24", mean: 14, min: 8 },
-                ],
-                [
-                    { date: "2026-09-25", mean: 13, min: 7 },
-                    { date: "2026-09-26", mean: 12, min: 6 },
-                    { date: "2026-09-27", mean: 14, min: 8 },
-                    { date: "2026-09-28", mean: 13, min: 7 },
-                    { date: "2026-09-29", mean: 14, min: 8 },
-                    { date: "2026-09-30", mean: 13, min: 7 },
-                    { date: "2026-10-01", mean: 12, min: 6 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "SUMMER")
-            expect(r.confidence).toBe("LOW")
-        })
+    it("plans winter tires for sustained cold without any frost", () => {
+        const result = assess(weatherFixture({ forecast: Array.from({ length: 16 }, (_, index) => forecastDay(index, { tempMeanC: 5, tempMinC: 2 })) }))
+        expect(result.state).toBe("COOL_TREND")
+        expect(result.coldDays).toBe(7)
+        expect(deriveTireAction(result, "SUMMER").kind).toBe("PLAN_WINTER")
     })
 
-    // ==========================================================================
-    // ORDERING INVARIANT — must ALWAYS hold when dates exist
-    // ==========================================================================
-
-    describe("ordering", () => {
-        it("always maintains canStart <= recommended.dateFrom <= recommended.dateTo <= maxTime", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-10-01", mean: 10, min: 5 },
-                    { date: "2026-10-02", mean: 9, min: 4 },
-                    { date: "2026-10-03", mean: 8, min: 3 },
-                    { date: "2026-10-04", mean: 7, min: 2 },
-                    { date: "2026-10-05", mean: 6, min: 1 },
-                ],
-                [
-                    { date: "2026-10-06", mean: 5, min: -1 },
-                    { date: "2026-10-07", mean: 4, min: -2 },
-                    { date: "2026-10-08", mean: 3, min: -1 },
-                    { date: "2026-10-09", mean: 4, min: -2 },
-                    { date: "2026-10-10", mean: 3, min: -3 },
-                    { date: "2026-10-11", mean: 2, min: -4 },
-                    { date: "2026-10-12", mean: 2, min: -3 },
-                    { date: "2026-10-13", mean: 3, min: -2 },
-                    { date: "2026-10-14", mean: 4, min: -1 },
-                    { date: "2026-10-15", mean: 3, min: -2 },
-                ],
-            )
-
-            const r = computeRecommendation(weather, "SUMMER")
-            const { date: canStart } = r.canStart
-            const { dateFrom, dateTo } = r.recommended
-            const { date: maxTime } = r.maxTime
-
-            // Only check ordering between dates that actually exist
-            if (canStart && dateFrom) expect(canStart <= dateFrom).toBe(true)
-            if (dateFrom && dateTo) expect(dateFrom <= dateTo).toBe(true)
-            if (dateTo && maxTime) expect(dateTo <= maxTime).toBe(true)
-            if (canStart && maxTime) expect(canStart <= maxTime).toBe(true)
-        })
+    it("requires all seven means before identifying a cold trend", () => {
+        const weather = weatherFixture({ forecast: Array.from({ length: 16 }, (_, index) => forecastDay(index, { tempMeanC: index < 5 ? 5 : index < 7 ? null : 12, tempMinC: 4.5 })) })
+        expect(assess(weather)).toMatchObject({ state: "INSUFFICIENT", coldDays: null })
     })
 
-    // ==========================================================================
-    // EDGE CASES
-    // ==========================================================================
+    it.each([4, 5])("uses the explicit 5-of-7 cold threshold (%i cold days)", (count) => {
+        const weather = weatherFixture({ forecast: Array.from({ length: 16 }, (_, index) => forecastDay(index, { tempMeanC: index < count ? 6.9 : 7, tempMinC: 5 })) })
+        expect(assess(weather).state).toBe(count === 5 ? "COOL_TREND" : "MIXED")
+    })
 
-    describe("edge cases", () => {
-        it("handles too little data gracefully", () => {
-            const weather = buildSeries(
-                [{ date: "2026-01-01", mean: 0, min: -5 }],
-                [{ date: "2026-01-02", mean: -1, min: -6 }],
-            )
+    it.each([7, 7.01])("treats mean %s°C at the summer boundary explicitly", (mean) => {
+        expect(assess(change(0, { tempMeanC: mean })).state).toBe(mean > 7 ? "SUMMER_CANDIDATE" : "MIXED")
+    })
 
-            const r = computeRecommendation(weather, "WINTER", "en")
-            expect(r.confidence).toBe("LOW")
-            expect(r.reasons).toEqual(expect.arrayContaining([expect.stringContaining("too little data")]))
-        })
+    it.each([0, 0.01, 4, 4.01])("handles minimum %s°C at guard boundaries", (min) => {
+        expect(assess(change(0, { tempMinC: min })).state).toBe(min <= 0 ? "WINTER_PRECAUTION" : min <= 4 ? "MIXED" : "SUMMER_CANDIDATE")
+    })
 
-        it("does not crash with history-only data (empty forecast)", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-06-01", mean: 20, min: 14 },
-                    { date: "2026-06-02", mean: 21, min: 15 },
-                    { date: "2026-06-03", mean: 22, min: 16 },
-                    { date: "2026-06-04", mean: 21, min: 15 },
-                    { date: "2026-06-05", mean: 20, min: 14 },
-                ],
-                [],
-            )
+    it.each([0.01, 0.99, 1])("distinguishes trace snowfall %s cm from winter precautions", (snowfallCm) => {
+        expect(assess(change(1, { snowfallCm })).state).toBe(snowfallCm >= 1 ? "WINTER_PRECAUTION" : "MIXED")
+    })
 
-            // Should not throw
-            const r = computeRecommendation(weather, "SUMMER")
-            expect(r.targetTire).toBe("WINTER")
-            expect(r.canStart.date).toBeUndefined()
-            expect(r.recommended.dateFrom).toBeUndefined()
-            expect(r.maxTime.date).toBeUndefined()
-            expect(r.confidence).toBe("LOW")
-        })
+    it.each([48, 56, 57, 66, 67, 73, 75, 86])("keeps WMO %i actionable even when temperatures are missing", (weatherCode) => {
+        expect(assess(change(1, { tempMeanC: null, tempMinC: null, weatherCode })).state).toBe("WINTER_PRECAUTION")
+    })
 
-        it("reasons include all expected metrics for SUMMER->WINTER", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-10-01", mean: 6, min: 1 },
-                    { date: "2026-10-02", mean: 5, min: 0 },
-                    { date: "2026-10-03", mean: 5, min: -1 },
-                    { date: "2026-10-04", mean: 4, min: -2 },
-                    { date: "2026-10-05", mean: 4, min: -1 },
-                ],
-                [
-                    { date: "2026-10-06", mean: 3, min: -3 },
-                    { date: "2026-10-07", mean: 2, min: -4 },
-                ],
-            )
+    it.each([71, 77, 85])("reports light snow code %i without forcing a seasonal swap", (weatherCode) => {
+        expect(assess(change(1, { weatherCode })).state).toBe("MIXED")
+    })
 
-            const r = computeRecommendation(weather, "SUMMER", "en")
-            expect(r.reasons).toHaveLength(3)
-            expect(r.reasons).toEqual(
-                expect.arrayContaining([
-                    expect.stringContaining("5-day average"),
-                    expect.stringContaining("Days below 7°C"),
-                    expect.stringContaining("Frost nights"),
-                ]),
-            )
-        })
+    it.each([95, 96, 99])("does not turn thunderstorm/hail code %i into a winter switch", (weatherCode) => {
+        expect(assess(change(1, { weatherCode })).state).toBe("SUMMER_CANDIDATE")
+    })
 
-        it("reasons include all expected metrics for WINTER->SUMMER", () => {
-            const weather = buildSeries(
-                [
-                    { date: "2026-04-01", mean: 10, min: 4 },
-                    { date: "2026-04-02", mean: 11, min: 5 },
-                    { date: "2026-04-03", mean: 12, min: 6 },
-                    { date: "2026-04-04", mean: 11, min: 5 },
-                    { date: "2026-04-05", mean: 10, min: 4 },
-                ],
-                [
-                    { date: "2026-04-06", mean: 12, min: 5 },
-                    { date: "2026-04-07", mean: 13, min: 6 },
-                ],
-            )
+    it.each(["tempMeanC", "tempMinC", "snowfallCm", "weatherCode"] as const)("missing %s in D9 cannot permit a summer suggestion", (field) => {
+        expect(assess(change(9, { [field]: null })).state).toBe("INSUFFICIENT")
+    })
 
-            const r = computeRecommendation(weather, "WINTER", "en")
-            expect(r.reasons).toHaveLength(3)
-            expect(r.reasons).toEqual(
-                expect.arrayContaining([
-                    expect.stringContaining("5-day average"),
-                    expect.stringContaining("Days above 7°C"),
-                    expect.stringContaining("Frost nights"),
-                ]),
-            )
-        })
+    it("keeps a known hazard despite unrelated missing data, without an optimistic booking interval", () => {
+        const weather = change(5, { tempMinC: -2 })
+        weather.forecast[1].tempMinC = null
+        const result = assess(weather)
+        expect(result.state).toBe("WINTER_PRECAUTION")
+        expect(deriveTireAction(result, "SUMMER").booking).toBeUndefined()
+        expect(result.signals.some((signal) => signal.date === forecastDay(5).date && signal.kind === "FREEZING_AIR")).toBe(true)
+    })
+
+    it("keeps today's event untimed with no before-today booking", () => {
+        const result = assess(change(0, { tempMinC: -1 }))
+        expect(result.state).toBe("WINTER_PRECAUTION")
+        expect(deriveTireAction(result, "UNKNOWN")).toMatchObject({ kind: "PLAN_WINTER", conditional: true })
+        expect(deriveTireAction(result, "UNKNOWN").booking).toBeUndefined()
+    })
+
+    it("uses calendar keys even if the provider skips or reorders dates", () => {
+        const weather = change(2, { tempMinC: -1 })
+        weather.forecast = weather.forecast.filter((day) => day.date !== forecastDay(1).date).reverse()
+        const result = assess(weather)
+        expect(result.state).toBe("WINTER_PRECAUTION")
+        expect(result.missing[0].date).toBe(forecastDay(1).date)
+        expect(deriveTireAction(result, "SUMMER").booking).toBeUndefined()
+    })
+
+    it.each([1, 10])("vetoes summer when duplicate winter reports conflict on D%i", (offset) => {
+        const weather = weatherFixture()
+        weather.forecast.push(forecastDay(offset, { snowfallCm: 1 }))
+        const result = assess(weather)
+        expect(result.state).toBe(offset < 7 ? "VERIFY_WARNING" : "WATCH_OUTLOOK")
+        expect(result.signals.some((signal) => !signal.confirmed && signal.kind === "SNOW")).toBe(true)
+        expect(deriveTireAction(result, "WINTER").booking).toBeUndefined()
+    })
+
+    it("keeps a lesser duplicate conflict unknown instead of clear", () => {
+        const weather = weatherFixture()
+        weather.forecast.push(forecastDay(2, { snowfallCm: 0.2 }))
+        const result = assess(weather)
+        expect(result.state).toBe("INSUFFICIENT")
+        expect(result.signals.some((signal) => !signal.confirmed && signal.kind === "LIGHT_SNOW")).toBe(true)
+    })
+
+    it("ignores seasonal changes entirely, including seasonal duplicates of ordinary days", () => {
+        const baseline = assess()
+        const weather = weatherFixture()
+        weather.forecast.push(...Array.from({ length: 46 }, (_, index) => forecastDay(index, { source: "SEASONAL", tempMeanC: -20, tempMinC: -30, snowfallCm: 50, weatherCode: 75 })))
+        expect(assess(weather)).toEqual(baseline)
+    })
+
+    it.each([{ forecast: [] }, { forecast: [forecastDay(0, { source: "SEASONAL" })] }])("does not fall back to history or seasonal-only data", ({ forecast }) => {
+        expect(assess(weatherFixture({ history: [forecastDay(-1)], forecast })).state).toBe("UNAVAILABLE")
+    })
+
+    it("fails closed after a refresh error even while the retained data is CURRENT", () => {
+        for (const weather of [weatherFixture(), change(1, { tempMinC: -2 })]) {
+            const result = assess(weather, "FAILURE")
+            expect(result.state).toBe("REFRESH_REQUIRED")
+            for (const setup of ["SUMMER", "WINTER", "UNKNOWN", "ALL_SEASON"] as TireSetup[]) {
+                expect(deriveTireAction(result, setup)).toMatchObject({ kind: "REFRESH" })
+                expect(deriveTireAction(result, setup).booking).toBeUndefined()
+            }
+            expect(result.signals.every((signal) => !signal.confirmed)).toBe(true)
+            expect(assess(weather, "SUCCESS").state).not.toBe("REFRESH_REQUIRED")
+        }
+    })
+
+    it.each([[6, "CURRENT"], [6.0001, "STALE"], [24, "STALE"], [24.0001, "EXPIRED"]] as const)("handles freshness age %s hours", (age, freshness) => {
+        const weather = weatherFixture({ fetchedAt: new Date(NOW.getTime() - age * 3_600_000).toISOString() })
+        const result = assess(weather)
+        expect(result.freshness).toBe(freshness)
+        if (age > 6) expect(result.state).toBe("REFRESH_REQUIRED")
+    })
+
+    it.each(["invalid", "2026-02-30T10:00:00Z", "2026-10-23T11:00:00Z"])("does not permit actions for invalid timestamp %s", (fetchedAt) => {
+        expect(assess(weatherFixture({ fetchedAt })).state).toBe("UNAVAILABLE")
+    })
+
+    it("tolerates at most five minutes of clock skew and discloses it", () => {
+        expect(assess(weatherFixture({ fetchedAt: new Date(NOW.getTime() + 300_000).toISOString() }))).toMatchObject({ state: "SUMMER_CANDIDATE", clockSkew: true })
+    })
+
+    it.each([{ timezone: "Invalid/Timezone" }, { locationId: "another-city" }])("rejects mismatched metadata %o", (changes) => {
+        expect(assess(weatherFixture(changes)).state).toBe("UNAVAILABLE")
+    })
+
+    it("never emits an automatic seasonal change for all-season tires", () => {
+        for (const weather of [weatherFixture(), change(0, { tempMinC: -5 }), change(4, { snowfallCm: 2 })]) {
+            expect(deriveTireAction(assess(weather), "ALL_SEASON")).toMatchObject({ kind: "ALL_SEASON_INFO" })
+            expect(deriveTireAction(assess(weather), "ALL_SEASON").booking).toBeUndefined()
+        }
+    })
+
+    it("makes summer advice conditional when the setup is unknown", () => {
+        const result = assess()
+        expect(deriveTireAction(result, "UNKNOWN")).toEqual({ kind: "CONSIDER_SUMMER", setup: "UNKNOWN", conditional: true })
+        expect(deriveTireAction(result, "WINTER").kind).toBe("CONSIDER_SUMMER")
+        expect(deriveTireAction(result, "SUMMER").kind).toBe("NO_CHANGE")
+    })
+
+    it("does not enable summer by deleting guard evidence or adding a winter signal", () => {
+        for (let offset = 0; offset < 10; offset++) {
+            for (const field of ["tempMeanC", "tempMinC", "snowfallCm", "weatherCode"] as const) {
+                expect(assess(change(offset, { [field]: null })).state).not.toBe("SUMMER_CANDIDATE")
+            }
+            expect(assess(change(offset, { tempMinC: -1 })).state).not.toBe("SUMMER_CANDIDATE")
+        }
+    })
+
+    it("is deterministic for fixed input and does not mutate provider data", () => {
+        const weather = change(2, { tempMinC: -1 })
+        const original = structuredClone(weather)
+        expect(assess(weather)).toEqual(assess(weather))
+        expect(weather).toEqual(original)
     })
 })

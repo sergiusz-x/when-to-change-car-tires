@@ -1,336 +1,100 @@
-import type {
-    Confidence,
-    DailyWeatherPoint,
-    RecommendationResult,
-    TireType,
-    WeatherSeries,
-} from "@/types"
-import { DEFAULT_LOCALE, getTranslations, type Locale } from "@/lib/i18n"
+import type { AssessmentState, DailyWeatherPoint, GeoLocation, RecommendationResult, RefreshOutcome, TireAction, TireSetup, WeatherSeries } from "@/types"
+import { addDays, isDateKey, localDate } from "@/lib/weather/dates"
+import { isWinterPrecaution, normalizeDailyPoints, signalsForDay, WEATHER_FIELDS } from "@/lib/weather/normalize"
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { ASSESSMENT_DAYS, CAUTION_MIN_C, COLD_DAYS_REQUIRED, SEASONAL_MEAN_C, SUMMER_GUARD_DAYS, TREND_DAYS } from "@/lib/recommendation/policy"
 
-function average(values: number[]): number {
-    if (values.length === 0) return 0
-    return values.reduce((sum, v) => sum + v, 0) / values.length
-}
+export const CURRENT_FORECAST_MS = 6 * 60 * 60 * 1000
+const EXPIRED_FORECAST_MS = 24 * 60 * 60 * 1000
+const CLOCK_SKEW_MS = 5 * 60 * 1000
+const HAZARD_FIELDS = ["tempMinC", "snowfallCm", "weatherCode"] as const
 
-/** Rolling average of `tempMeanC` ending at `endIndex` (inclusive), up to `windowSize` days. */
-function rollingAvg(series: DailyWeatherPoint[], endIndex: number, windowSize: number): number {
-    const start = Math.max(0, endIndex - windowSize + 1)
-    return average(series.slice(start, endIndex + 1).map((p) => p.tempMeanC))
-}
-
-/** Count frost nights (tempMinC <= 0) in slice [fromIndex+1 .. fromIndex+days]. */
-function frostNightsAhead(series: DailyWeatherPoint[], fromIndex: number, days: number): number {
-    return series.slice(fromIndex + 1, fromIndex + 1 + days).filter((p) => p.tempMinC <= 0).length
-}
-
-/** True when any of the next `days` days has tempMinC <= 0. */
-function frostWithin(series: DailyWeatherPoint[], fromIndex: number, days: number): boolean {
-    return series.slice(fromIndex + 1, fromIndex + 1 + days).some((p) => p.tempMinC <= 0)
-}
-
-// ---------------------------------------------------------------------------
-// Milestone scanning
-// ---------------------------------------------------------------------------
-
-/**
- * Scans the full timeline forward from `startIdx`, returns the index of the
- * first day that passes the given `test` for at least `consecutive` days in a
- * row.  Returns `null` when no such run exists.
- */
-function findFirstRun(
-    series: DailyWeatherPoint[],
-    startIdx: number,
-    test: (day: DailyWeatherPoint, index: number) => boolean,
-    consecutive: number,
-): number | null {
-    let streak = 0
-    for (let i = startIdx; i < series.length; i++) {
-        if (test(series[i], i)) {
-            streak++
-            if (streak >= consecutive) return i - consecutive + 1
-        } else {
-            streak = 0
-        }
-    }
-    return null
-}
-
-// ---------------------------------------------------------------------------
-// Core logic
-// ---------------------------------------------------------------------------
-
-/**
- * Decides whether the forecast contains enough of a seasonal transition to
- * produce milestone dates.
- *
- * We intentionally return `null` dates when the forecast does not show a
- * transition — instead of inventing a fallback date.
- */
 export function computeRecommendation(
     weather: WeatherSeries,
-    currentTire: TireType,
-    locale: Locale = DEFAULT_LOCALE,
+    location: GeoLocation,
+    options: { now: Date; refreshOutcome: RefreshOutcome },
 ): RecommendationResult {
-    const messages = getTranslations(locale)
-    const timeline: DailyWeatherPoint[] = [...weather.history, ...weather.forecast]
-    const todayIdx = weather.history.length - 1 // last history day = "today"
-    const targetTire: TireType = currentTire === "SUMMER" ? "WINTER" : "SUMMER"
-
-    if (timeline.length < 5) {
-        return tooLittleData(targetTire, locale)
-    }
-
-    // ---- find milestones ----
-    const milestones =
-        currentTire === "WINTER"
-            ? findWinterToSummer(timeline, todayIdx)
-            : findSummerToWinter(timeline, todayIdx)
-
-    // ---- enforce ordering  canStart <= recommended <= maxTime ----
-    const canStartIdx = milestones.canStart
-    let recommendedIdx = milestones.recommended
-    let maxTimeIdx = milestones.maxTime
-
-    if (canStartIdx !== null && recommendedIdx !== null && recommendedIdx < canStartIdx) {
-        recommendedIdx = canStartIdx
-    }
-    if (recommendedIdx !== null && maxTimeIdx !== null && maxTimeIdx < recommendedIdx) {
-        maxTimeIdx = recommendedIdx
-    }
-    if (canStartIdx !== null && maxTimeIdx !== null && maxTimeIdx < canStartIdx) {
-        maxTimeIdx = canStartIdx
-    }
-
-    // ---- build recommended window ----
-    const windowFrom: number | null = recommendedIdx
-    let windowTo: number | null = null
-
-    if (windowFrom !== null) {
-        if (maxTimeIdx !== null) {
-            windowTo = maxTimeIdx
-        } else {
-            // no deadline found – give a 7-day window capped to timeline
-            windowTo = Math.min(windowFrom + 6, timeline.length - 1)
-        }
-        if (windowTo < windowFrom) windowTo = windowFrom
-    }
-
-    // ---- confidence ----
-    const confidence = computeConfidence(timeline, todayIdx, currentTire, milestones)
-
-    // ---- reasons ----
-    const reasons = buildReasons(timeline, todayIdx, currentTire, locale)
-
-    // ---- assemble result ----
-    const dateOf = (idx: number | null) => (idx !== null ? timeline[idx]?.date : undefined)
+    const { now, refreshOutcome } = options
+    const today = localDate(now, weather.timezone)
+    const timestampValid = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|\+00:00)$/.test(weather.fetchedAt) &&
+        isDateKey(weather.fetchedAt.slice(0, 10)) && Number(weather.fetchedAt.slice(11, 13)) < 24 &&
+        Number(weather.fetchedAt.slice(14, 16)) < 60 && Number(weather.fetchedAt.slice(17, 19)) < 60
+    const fetchedMs = timestampValid ? Date.parse(weather.fetchedAt) : NaN
+    const rawAge = now.getTime() - fetchedMs
+    const validTime = Number.isFinite(rawAge) && rawAge >= -CLOCK_SKEW_MS
+    const age = Math.max(0, rawAge)
+    const freshness = !validTime ? "INVALID" : age <= CURRENT_FORECAST_MS ? "CURRENT" : age <= EXPIRED_FORECAST_MS ? "STALE" : "EXPIRED"
+    const metadataValid = Boolean(today && validTime && weather.locationId === location.id && location.id &&
+        weather.timezone === location.timezone && Number.isFinite(location.latitude) && Math.abs(location.latitude) <= 90 &&
+        Number.isFinite(location.longitude) && Math.abs(location.longitude) <= 180)
+    // Filter provenance BEFORE normalization: seasonal values cannot poison a forecast day.
+    const days = today ? normalizeDailyPoints(weather.forecast.filter((day) => day.source === "FORECAST"))
+        .filter((day) => day.date >= today && day.date <= addDays(today, ASSESSMENT_DAYS - 1)) : []
+    const byDate = new Map(days.map((day) => [day.date, day]))
+    const block = today ? Array.from({ length: SUMMER_GUARD_DAYS }, (_, index) => ({ date: addDays(today, index), day: byDate.get(addDays(today, index)) })) : []
+    const missing = block.map(({ date, day }) => ({ date, fields: WEATHER_FIELDS.filter((field) => day?.[field] == null) }))
+        .filter((item) => item.fields.length > 0)
+    const outlookIncomplete = today ? Array.from({ length: ASSESSMENT_DAYS - SUMMER_GUARD_DAYS }, (_, index) => addDays(today, index + SUMMER_GUARD_DAYS))
+        .filter((date) => HAZARD_FIELDS.some((field) => byDate.get(date)?.[field] == null)) : []
+    const dataIssues: RecommendationResult["dataIssues"] = days.flatMap((day) => [
+        ...(day.invalidFields?.length ? [{ date: day.date, fields: day.invalidFields, kind: "INVALID" as const }] : []),
+        ...(day.conflicts?.length ? [{ date: day.date, fields: day.conflicts, kind: "CONFLICT" as const }] : []),
+    ])
+    const rawSignals = days.flatMap((day) => [...signalsForDay(day), ...(day.unconfirmedSignals ?? [])])
+    const canIssueAction = metadataValid && freshness === "CURRENT" && refreshOutcome === "SUCCESS"
+    const signals = rawSignals.map((signal) => ({ ...signal, confirmed: signal.confirmed && canIssueAction }))
+    const firstWeek = block.slice(0, TREND_DAYS)
+    const completeMeans = firstWeek.length === TREND_DAYS && firstWeek.every(({ day }) => day?.tempMeanC != null)
+    const coldDays = completeMeans ? firstWeek.filter(({ day }) => day!.tempMeanC! < SEASONAL_MEAN_C).length : null
+    const weekEnd = today ? addDays(today, TREND_DAYS - 1) : undefined
+    const guardEnd = today ? addDays(today, SUMMER_GUARD_DAYS - 1) : undefined
+    const nearTerm = weekEnd ? rawSignals.filter((signal) => signal.date <= weekEnd) : []
+    let state: AssessmentState
+    if (!metadataValid || !days.some((day) => WEATHER_FIELDS.some((field) => day[field] !== null))) state = "UNAVAILABLE"
+    else if (!canIssueAction) state = "REFRESH_REQUIRED"
+    else if (nearTerm.some((signal) => signal.confirmed && isWinterPrecaution(signal))) state = "WINTER_PRECAUTION"
+    else if (nearTerm.some((signal) => !signal.confirmed && isWinterPrecaution(signal))) state = "VERIFY_WARNING"
+    else if (coldDays !== null && coldDays >= COLD_DAYS_REQUIRED) state = "COOL_TREND"
+    else if (rawSignals.some(isWinterPrecaution)) state = "WATCH_OUTLOOK"
+    else if (rawSignals.some((signal) => signal.confirmed && guardEnd && signal.date <= guardEnd)) state = "MIXED"
+    else if (missing.length === 0 && firstWeek.every(({ day }) => day!.tempMeanC! > SEASONAL_MEAN_C) && block.every(({ day }) => day!.tempMinC! > CAUTION_MIN_C)) state = "SUMMER_CANDIDATE"
+    else state = missing.length ? "INSUFFICIENT" : "MIXED"
 
     return {
-        targetTire,
-        canStart: {
-            label: "CAN_START_PLANNING",
-            date: dateOf(canStartIdx),
-            statusText:
-                canStartIdx !== null
-                    ? messages.engine.canStartPlanningFrom(timeline[canStartIdx].date)
-                    : messages.engine.noTransitionVisible,
-        },
-        recommended: {
-            label: "RECOMMENDED_WINDOW",
-            dateFrom: dateOf(windowFrom),
-            dateTo: dateOf(windowTo),
-            statusText:
-                windowFrom !== null && windowTo !== null
-                    ? messages.engine.bestWindowBetween(timeline[windowFrom].date, timeline[windowTo].date)
-                    : messages.engine.notEnoughDataForWindow,
-        },
-        maxTime: {
-            label: "MAX_TIME",
-            date: dateOf(maxTimeIdx),
-            statusText:
-                maxTimeIdx !== null
-                    ? messages.engine.latestSafeDate(timeline[maxTimeIdx].date)
-                    : messages.engine.noDeadlineVisible,
-        },
-        confidence,
-        reasons,
-        computedAt: new Date().toISOString(),
+        state, today, assessedThrough: today ? addDays(today, ASSESSMENT_DAYS - 1) : undefined, fetchedAt: weather.fetchedAt,
+        freshness, refreshOutcome, clockSkew: validTime && rawAge < 0, days, signals, missing, coldDays, outlookIncomplete, dataIssues, metadataValid,
     }
 }
 
-// ---------------------------------------------------------------------------
-// WINTER → SUMMER  (user has winter tires, looking for warm transition)
-// ---------------------------------------------------------------------------
-
-type MilestoneIndices = {
-    canStart: number | null;
-    recommended: number | null;
-    maxTime: number | null;
+function completeHazards(days: DailyWeatherPoint[], today: string, through: string): boolean {
+    const byDate = new Map(days.map((day) => [day.date, day]))
+    for (let date = today; date <= through; date = addDays(date, 1)) {
+        const day = byDate.get(date)
+        if (!day || HAZARD_FIELDS.some((field) => day[field] === null) || day.unconfirmedSignals?.length) return false
+    }
+    return true
 }
 
-function findWinterToSummer(timeline: DailyWeatherPoint[], todayIdx: number): MilestoneIndices {
-    // canStart – first run of 3 consecutive days with mean >= 7°C
-    const canStart = findFirstRun(timeline, todayIdx, (day) => day.tempMeanC >= 7, 3)
-
-    // recommended – first day (from canStart or today) where:
-    //   rolling 5-day avg >= 7°C  AND  frost nights in next 7 days <= 1
-    const recSearchFrom = canStart ?? todayIdx
-    let recommended: number | null = null
-    for (let i = recSearchFrom; i < timeline.length; i++) {
-        const avg5 = rollingAvg(timeline, i, 5)
-        const frost7 = frostNightsAhead(timeline, i, 7)
-        if (avg5 >= 7 && frost7 <= 1) {
-            recommended = i
-            break
+export function deriveTireAction(result: RecommendationResult, setup: TireSetup): TireAction {
+    const action: TireAction = { kind: "NO_ASSESSMENT", setup, conditional: setup === "UNKNOWN" }
+    if (result.state === "REFRESH_REQUIRED") return { ...action, kind: "REFRESH" }
+    if (["UNAVAILABLE", "INSUFFICIENT"].includes(result.state)) return action
+    if (result.state === "VERIFY_WARNING") return { ...action, kind: "VERIFY" }
+    if (setup === "ALL_SEASON") return { ...action, kind: "ALL_SEASON_INFO" }
+    if (["WINTER_PRECAUTION", "COOL_TREND"].includes(result.state)) {
+        if (setup === "WINTER") return { ...action, kind: "NO_CHANGE" }
+        action.kind = "PLAN_WINTER"
+        const first = result.signals.find((signal) => signal.confirmed && isWinterPrecaution(signal))
+        if (result.today && result.state === "WINTER_PRECAUTION" && first && first.date > result.today &&
+            completeHazards(result.days, result.today, first.date)) {
+            const before = addDays(first.date, -1)
+            action.booking = { from: result.today, to: before < addDays(result.today, 3) ? before : addDays(result.today, 3) }
         }
-    }
-
-    // maxTime – first day (from recommended or today) where:
-    //   rolling 5-day avg >= 12°C  AND  no frost in next 7 days
-    //   (winter tires degrade fast in heat)
-    const maxSearchFrom = recommended ?? todayIdx
-    let maxTime: number | null = null
-    for (let i = maxSearchFrom; i < timeline.length; i++) {
-        const avg5 = rollingAvg(timeline, i, 5)
-        const frost7 = frostNightsAhead(timeline, i, 7)
-        if (avg5 >= 12 && frost7 === 0) {
-            maxTime = i
-            break
+        if (result.today && result.state === "COOL_TREND" && completeHazards(result.days, result.today, addDays(result.today, 3))) {
+            action.booking = { from: result.today, to: addDays(result.today, 3) }
         }
+        return action
     }
-
-    return { canStart, recommended, maxTime }
-}
-
-// ---------------------------------------------------------------------------
-// SUMMER → WINTER  (user has summer tires, looking for cold transition)
-// ---------------------------------------------------------------------------
-
-function findSummerToWinter(timeline: DailyWeatherPoint[], todayIdx: number): MilestoneIndices {
-    // canStart – first run of 3 consecutive days with mean < 7°C
-    const canStart = findFirstRun(timeline, todayIdx, (day) => day.tempMeanC < 7, 3)
-
-    // recommended – first day (from canStart or today) where:
-    //   rolling 5-day avg < 7°C  AND  frost nights in next 7 days >= 2
-    const recSearchFrom = canStart ?? todayIdx
-    let recommended: number | null = null
-    for (let i = recSearchFrom; i < timeline.length; i++) {
-        const avg5 = rollingAvg(timeline, i, 5)
-        const frost7 = frostNightsAhead(timeline, i, 7)
-        if (avg5 < 7 && frost7 >= 2) {
-            recommended = i
-            break
-        }
-    }
-
-    // maxTime – first day (from recommended or today) where:
-    //   rolling 3-day avg < 3°C  OR  frost within 48h
-    //   (summer tires are dangerous on ice)
-    const maxSearchFrom = recommended ?? todayIdx
-    let maxTime: number | null = null
-    for (let i = maxSearchFrom; i < timeline.length; i++) {
-        const avg3 = rollingAvg(timeline, i, 3)
-        const frostSoon = frostWithin(timeline, i, 2)
-        if (avg3 < 3 || frostSoon) {
-            maxTime = i
-            break
-        }
-    }
-
-    return { canStart, recommended, maxTime }
-}
-
-// ---------------------------------------------------------------------------
-// Confidence
-// ---------------------------------------------------------------------------
-
-function computeConfidence(
-    timeline: DailyWeatherPoint[],
-    todayIdx: number,
-    currentTire: TireType,
-    milestones: MilestoneIndices,
-): Confidence {
-    // No milestones at all → LOW
-    if (milestones.canStart === null) return "LOW"
-
-    const next7 = timeline.slice(todayIdx + 1, todayIdx + 8)
-    const warmDays = next7.filter((d) => d.tempMeanC >= 7).length
-    const coldDays = next7.filter((d) => d.tempMeanC < 7).length
-    const frostNights = next7.filter((d) => d.tempMinC <= 0).length
-
-    if (currentTire === "SUMMER") {
-        // Looking for cold transition → switch to winter
-        if (coldDays >= 5 || frostNights >= 3) return "HIGH"
-        if (coldDays >= 3 || frostNights >= 1) return "MEDIUM"
-        return "LOW"
-    }
-
-    // Looking for warm transition → switch to summer
-    if (warmDays >= 5 && frostNights === 0) return "HIGH"
-    if (warmDays >= 3 && frostNights <= 1) return "MEDIUM"
-    return "LOW"
-}
-
-// ---------------------------------------------------------------------------
-// Reasons
-// ---------------------------------------------------------------------------
-
-function buildReasons(
-    timeline: DailyWeatherPoint[],
-    todayIdx: number,
-    currentTire: TireType,
-    locale: Locale,
-): string[] {
-    const messages = getTranslations(locale)
-    const avg5 = rollingAvg(timeline, todayIdx, 5)
-    const next7 = timeline.slice(todayIdx + 1, todayIdx + 8)
-    const next14 = timeline.slice(todayIdx + 1, todayIdx + 15)
-
-    const frost7 = next7.filter((d) => d.tempMinC <= 0).length
-
-    if (currentTire === "SUMMER") {
-        const cold14 = next14.filter((d) => d.tempMeanC < 7).length
-        return [
-            messages.reasons.fiveDayAverage(avg5),
-            messages.reasons.daysBelow7In14(cold14),
-            messages.reasons.frostNightsIn7(frost7),
-        ]
-    }
-
-    const warm14 = next14.filter((d) => d.tempMeanC >= 7).length
-    return [
-        messages.reasons.fiveDayAverage(avg5),
-        messages.reasons.daysAbove7In14(warm14),
-        messages.reasons.frostNightsIn7(frost7),
-    ]
-}
-
-// ---------------------------------------------------------------------------
-// Fallbacks
-// ---------------------------------------------------------------------------
-
-function tooLittleData(targetTire: TireType, locale: Locale): RecommendationResult {
-    const messages = getTranslations(locale)
-
-    return {
-        targetTire,
-        canStart: {
-            label: "CAN_START_PLANNING",
-            statusText: messages.engine.tooLittleDataCanStart,
-        },
-        recommended: {
-            label: "RECOMMENDED_WINDOW",
-            statusText: messages.engine.tooLittleDataRecommended,
-        },
-        maxTime: {
-            label: "MAX_TIME",
-            statusText: messages.engine.tooLittleDataMaxTime,
-        },
-        confidence: "LOW",
-        reasons: [messages.reasons.tooLittleData],
-        computedAt: new Date().toISOString(),
-    }
+    if (result.state === "SUMMER_CANDIDATE") return { ...action, kind: setup === "SUMMER" ? "NO_CHANGE" : "CONSIDER_SUMMER" }
+    return { ...action, kind: setup === "WINTER" ? "WAIT" : "MONITOR" }
 }

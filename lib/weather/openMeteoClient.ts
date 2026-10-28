@@ -1,5 +1,7 @@
-import type { DailyWeatherPoint, GeoLocation, WeatherSeries } from "@/types"
+import type { DailyWeatherPoint, GeoLocation, WeatherField, WeatherSeries } from "@/types"
 import type { Locale } from "@/lib/i18n"
+import { localDate, sameTimezone } from "@/lib/weather/dates"
+import { normalizeDailyPoints, validValue } from "@/lib/weather/normalize"
 
 type GeocodingResponse = {
     results?: Array<{
@@ -15,7 +17,10 @@ type GeocodingResponse = {
 
 type ForecastResponse = {
     timezone?: string;
+    daily_units?: Record<string, string>;
     daily?: {
+        snowfall_sum?: unknown;
+        weather_code?: unknown;
         time?: unknown;
         temperature_2m_mean?: unknown;
         temperature_2m_min?: unknown;
@@ -24,7 +29,10 @@ type ForecastResponse = {
 
 type SeasonalForecastResponse = {
     timezone?: string;
+    daily_units?: Record<string, string>;
     daily?: {
+        snowfall_sum?: unknown;
+        weather_code?: unknown;
         time?: unknown;
         temperature_2m_mean?: unknown;
         temperature_2m_min?: unknown;
@@ -128,37 +136,30 @@ async function fetchJson<T>(url: URL, signal?: AbortSignal): Promise<T> {
     }
 }
 
-function toDailyPoints(
-    timeValues: unknown,
-    meanValues: unknown,
-    minValues: unknown,
-): DailyWeatherPoint[] {
-    if (!Array.isArray(timeValues) || !Array.isArray(meanValues)) {
-        return []
-    }
-
-    const minArray = Array.isArray(minValues) ? minValues : []
-    const total = Math.min(timeValues.length, meanValues.length)
-    const points: DailyWeatherPoint[] = []
-
-    for (let index = 0; index < total; index++) {
-        const date = timeValues[index]
-        const mean = meanValues[index]
-        const min = minArray[index]
-
-        if (typeof date !== "string" || !isFiniteNumber(mean)) {
-            continue
+export function toDailyPoints(data: ForecastResponse, source: DailyWeatherPoint["source"]): DailyWeatherPoint[] {
+    const daily = data.daily
+    if (!Array.isArray(daily?.time)) return []
+    const read = (values: unknown, index: number) => Array.isArray(values) ? values[index] : null
+    const unit = (key: string, expected: string) => data.daily_units?.[key] === expected
+    return normalizeDailyPoints(daily.time.flatMap((date, index) => {
+        if (typeof date !== "string") return []
+        const invalidFields: WeatherField[] = []
+        const field = (name: WeatherField, key: string, values: unknown, expectedUnit: string) => {
+            const raw = read(values, index)
+            const value = unit(key, expectedUnit) ? validValue(name, raw) : null
+            if (raw != null && value === null) invalidFields.push(name)
+            return value
         }
-
-        const safeMin = isFiniteNumber(min) ? Math.min(min, mean) : mean
-        points.push({
-            date,
-            tempMeanC: mean,
-            tempMinC: safeMin,
-        })
-    }
-
-    return points
+        const day: DailyWeatherPoint = {
+            date, source,
+            tempMeanC: field("tempMeanC", "temperature_2m_mean", daily.temperature_2m_mean, "°C"),
+            tempMinC: field("tempMinC", "temperature_2m_min", daily.temperature_2m_min, "°C"),
+            snowfallCm: field("snowfallCm", "snowfall_sum", daily.snowfall_sum, "cm"),
+            weatherCode: field("weatherCode", "weather_code", daily.weather_code, "wmo code"),
+            invalidFields,
+        }
+        return [day]
+    }))
 }
 
 export async function searchCities(query: string, locale: Locale = "en", signal?: AbortSignal): Promise<GeoLocation[]> {
@@ -199,34 +200,20 @@ export async function searchCities(query: string, locale: Locale = "en", signal?
         }))
 }
 
-function getTodayInTimezone(timezone: string): string {
-    try {
-        const formatter = new Intl.DateTimeFormat("en-CA", {
-            timeZone: sanitizeTimezone(timezone),
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-        })
-
-        return formatter.format(new Date())
-    } catch {
-        return new Intl.DateTimeFormat("en-CA", {
-            timeZone: "UTC",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-        }).format(new Date())
-    }
-}
-
 export async function fetchWeatherSeries(location: GeoLocation, signal?: AbortSignal): Promise<WeatherSeries> {
     const normalizedLocation = normalizeLocation(location)
+    if (!localDate(new Date(), location.timezone) || !location.id ||
+        !isFiniteNumber(location.latitude) || Math.abs(location.latitude) > 90 ||
+        !isFiniteNumber(location.longitude) || Math.abs(location.longitude) > 180) {
+        throw new Error("Invalid weather location.")
+    }
 
     const url = new URL(FORECAST_URL)
     url.searchParams.set("latitude", String(normalizedLocation.latitude))
     url.searchParams.set("longitude", String(normalizedLocation.longitude))
     url.searchParams.set("timezone", normalizedLocation.timezone || "UTC")
-    url.searchParams.set("daily", "temperature_2m_mean,temperature_2m_min")
+    url.searchParams.set("daily", "temperature_2m_mean,temperature_2m_min,snowfall_sum,weather_code")
+    url.searchParams.set("temperature_unit", "celsius")
     url.searchParams.set("past_days", "14")
     url.searchParams.set("forecast_days", String(ACCURATE_FORECAST_DAYS))
 
@@ -236,17 +223,17 @@ export async function fetchWeatherSeries(location: GeoLocation, signal?: AbortSi
     seasonalUrl.searchParams.set("timezone", normalizedLocation.timezone || "UTC")
     seasonalUrl.searchParams.set("daily", "temperature_2m_mean,temperature_2m_min")
     seasonalUrl.searchParams.set("forecast_days", String(TOTAL_FORECAST_DAYS))
+    seasonalUrl.searchParams.set("temperature_unit", "celsius")
 
     const data = await fetchJson<ForecastResponse>(url, signal)
-    const daily = toDailyPoints(
-        data.daily?.time,
-        data.daily?.temperature_2m_mean,
-        data.daily?.temperature_2m_min,
-    )
-
-    if (daily.length === 0) {
+    const fetchedAt = new Date().toISOString()
+    const daily = toDailyPoints(data, "FORECAST")
+    if (!daily.some((day) => [day.tempMeanC, day.tempMinC, day.snowfallCm, day.weatherCode].some((value) => value !== null))) {
         throw new Error("Weather service returned no usable daily data.")
     }
+    const timezone = normalizedLocation.timezone
+    const today = localDate(new Date(fetchedAt), timezone)
+    if (!today || !sameTimezone(data.timezone ?? "", timezone)) throw new Error("Weather service returned an unexpected timezone.")
 
     let seasonalData: SeasonalForecastResponse | null = null
 
@@ -256,29 +243,14 @@ export async function fetchWeatherSeries(location: GeoLocation, signal?: AbortSi
         seasonalData = null
     }
 
-    const timezone = sanitizeTimezone(data.timezone || normalizedLocation.timezone)
-    const today = getTodayInTimezone(timezone)
+    if (signal?.aborted) throw new DOMException("Request aborted", "AbortError")
+    if (seasonalData && !sameTimezone(seasonalData.timezone ?? "", timezone)) seasonalData = null
 
-    const history = daily.filter((point) => point.date <= today)
-    const accurateForecast = daily
-        .filter((point) => point.date > today)
-        .map((point) => ({
-            ...point,
-            accuracy: "HIGH" as const,
-        }))
-
-    const accurateDates = new Set(accurateForecast.map((point) => point.date))
+    const history = daily.filter((point) => point.date < today)
+    const accurateForecast = daily.filter((point) => point.date >= today)
+    const ordinaryEnd = accurateForecast.at(-1)?.date ?? today
     const longRangeForecast = seasonalData
-        ? toDailyPoints(
-            seasonalData.daily?.time,
-            seasonalData.daily?.temperature_2m_mean,
-            seasonalData.daily?.temperature_2m_min,
-        )
-            .filter((point) => point.date > today && !accurateDates.has(point.date))
-            .map((point) => ({
-                ...point,
-                accuracy: "LOW" as const,
-            }))
+        ? toDailyPoints(seasonalData, "SEASONAL").filter((point) => point.date > ordinaryEnd)
         : []
 
     const forecast = [...accurateForecast, ...longRangeForecast]
@@ -286,9 +258,7 @@ export async function fetchWeatherSeries(location: GeoLocation, signal?: AbortSi
         .slice(0, TOTAL_FORECAST_DAYS)
 
     return {
-        history,
-        forecast,
-        fetchedAt: new Date().toISOString(),
-        timezone,
+        locationId: location.id, history, forecast, fetchedAt, timezone,
+        seasonalAvailable: longRangeForecast.length > 0,
     }
 }

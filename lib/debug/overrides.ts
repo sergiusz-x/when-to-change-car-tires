@@ -1,4 +1,6 @@
-import type { WeatherSeries } from "@/types"
+import type { GeoLocation, WeatherSeries } from "@/types"
+
+import { addDays, isDateKey, localDate } from "@/lib/weather/dates"
 
 export type DebugTransitionMode = "SUMMER_TO_WINTER" | "WINTER_TO_SUMMER"
 
@@ -31,7 +33,7 @@ function parseDateOverride(value: string | null): string | undefined {
     }
 
     const normalized = value.trim()
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    if (!isDateKey(normalized)) {
         return undefined
     }
 
@@ -144,8 +146,8 @@ function generatePoint(
         return { tempMeanC: roundToOne(mean), tempMinC: clampMinBelowMean(mean, min) }
     }
 
-    const mean = 4 + forecastDay * 1.2 + jitter(random, 0.7)
-    const min = mean - 3 + Math.min(forecastDay * 0.28, 2.3) + jitter(random, 0.6)
+    const mean = 10 + forecastDay * 0.2 + jitter(random, 0.7)
+    const min = mean - 4 + jitter(random, 0.6)
     return { tempMeanC: roundToOne(mean), tempMinC: clampMinBelowMean(mean, min) }
 }
 
@@ -155,7 +157,7 @@ export function applyDebugWeatherOverrides(weather: WeatherSeries, settings: Deb
     }
 
     const timelineLength = weather.history.length + weather.forecast.length
-    const todayIndex = weather.history.length - 1
+    const todayIndex = weather.history.length
     const random = createSeededRandom(settings.seed)
 
     const generated = Array.from({ length: timelineLength }, (_, index) =>
@@ -164,10 +166,16 @@ export function applyDebugWeatherOverrides(weather: WeatherSeries, settings: Deb
 
     return {
         ...weather,
+        simulated: true,
         history: weather.history.map((point, index) => ({
             ...point,
             tempMeanC: generated[index].tempMeanC,
             tempMinC: generated[index].tempMinC,
+            snowfallCm: 0,
+            weatherCode: 0,
+            invalidFields: [],
+            conflicts: [],
+            unconfirmedSignals: [],
         })),
         forecast: weather.forecast.map((point, index) => {
             const generatedIndex = weather.history.length + index
@@ -175,7 +183,30 @@ export function applyDebugWeatherOverrides(weather: WeatherSeries, settings: Deb
                 ...point,
                 tempMeanC: generated[generatedIndex].tempMeanC,
                 tempMinC: generated[generatedIndex].tempMinC,
+                snowfallCm: generated[generatedIndex].tempMeanC < 3 ? 1 : 0,
+                weatherCode: generated[generatedIndex].tempMeanC < 3 ? 73 : 0,
+                invalidFields: [],
+                conflicts: [],
+                unconfirmedSignals: [],
             }
         }),
     }
+}
+
+/** Complete synthetic data: debug previews never depend on a live weather request. */
+export function createDebugWeather(location: GeoLocation, settings: DebugSettings, now: Date): WeatherSeries {
+    const today = settings.dateOverride ?? localDate(now, location.timezone)!
+    const point = (offset: number) => ({
+        date: addDays(today, offset), tempMeanC: 10, tempMinC: 6, snowfallCm: 0, weatherCode: 0,
+        source: offset < 16 ? "FORECAST" as const : "SEASONAL" as const,
+    })
+    const weather: WeatherSeries = {
+        locationId: location.id,
+        history: Array.from({ length: 14 }, (_, index) => point(index - 14)),
+        forecast: Array.from({ length: 46 }, (_, index) => point(index)),
+        fetchedAt: settings.dateOverride ? `${today}T12:00:00Z` : now.toISOString(),
+        timezone: location.timezone,
+        seasonalAvailable: true,
+    }
+    return applyDebugWeatherOverrides(weather, settings)
 }

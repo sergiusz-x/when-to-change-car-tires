@@ -21,6 +21,18 @@ function sanitizeText(value: string | null, maxLength: number): string | undefin
     return normalized.length > 0 ? normalized : undefined
 }
 
+function sanitizeCity(value: string | null): string | undefined {
+    if (!value) {
+        return undefined
+    }
+
+    try {
+        return sanitizeText(decodeURIComponent(value), 120)
+    } catch {
+        return sanitizeText(value, 120)
+    }
+}
+
 function parseCoordinate(value: string | null, min: number, max: number): number | undefined {
     if (!value) {
         return undefined
@@ -57,7 +69,7 @@ export const revalidate = 0
 
 export async function GET() {
     const requestHeaders = await headers()
-    const city = sanitizeText(requestHeaders.get("x-vercel-ip-city"), 120)
+    const city = sanitizeCity(requestHeaders.get("x-vercel-ip-city"))
     const countryCode = sanitizeText(requestHeaders.get("x-vercel-ip-country"), 2)?.toUpperCase()
     const countryName = sanitizeText(requestHeaders.get("x-vercel-ip-country-name"), 120)
     const latitude = parseCoordinate(requestHeaders.get("x-vercel-ip-latitude"), -90, 90)
